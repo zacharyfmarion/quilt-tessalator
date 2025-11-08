@@ -34,15 +34,39 @@ const FABRIC_NAMES = [
   'Fabric 5',
 ];
 
+interface CollapsibleSectionProps {
+  title: string;
+  isCollapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function CollapsibleSection({ title, isCollapsed, onToggle, children }: CollapsibleSectionProps) {
+  return (
+    <section className={isCollapsed ? 'collapsed' : ''}>
+      <h2 onClick={onToggle}>
+        {title}
+        <span className="collapse-icon">{isCollapsed ? '▶' : '▼'}</span>
+      </h2>
+      {!isCollapsed && <div className="section-content">{children}</div>}
+    </section>
+  );
+}
+
 function App() {
   const [config, setConfig] = useState<TessellationConfig>(DEFAULT_CONFIG);
   const [showSeamAllowance, setShowSeamAllowance] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
-  // Generate tessellation
+  // Generate base tessellation (without seam allowance)
+  const baseTessellation = useMemo(() => {
+    return generateTessellation(config);
+  }, [config]);
+
+  // Apply seam allowance if needed (doesn't regenerate the pattern)
   const tessellation = useMemo(() => {
-    const base = generateTessellation(config);
-    return showSeamAllowance ? applySeamAllowance(base) : base;
-  }, [config, showSeamAllowance]);
+    return showSeamAllowance ? applySeamAllowance(baseTessellation) : baseTessellation;
+  }, [baseTessellation, showSeamAllowance]);
 
   const svg = useMemo(() => {
     return generateFullSVG(tessellation, DEFAULT_PALETTE, {
@@ -77,6 +101,13 @@ function App() {
     setConfig({ ...config });
   };
 
+  const toggleSection = (sectionName: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
+
   return (
     <div className="app">
       <header>
@@ -86,182 +117,197 @@ function App() {
 
       <div className="container">
         <aside className="controls">
-          <section>
-            <h2>Grid Settings</h2>
-            <label>
-              Rows: {config.rows}
-              <input
-                type="range"
-                min="2"
-                max="20"
-                value={config.rows}
-                onChange={(e) => updateConfig({ rows: parseInt(e.target.value) })}
-              />
-            </label>
+          <div className="controls-scrollable">
+            <CollapsibleSection
+              title="Grid Settings"
+              isCollapsed={!!collapsedSections['grid']}
+              onToggle={() => toggleSection('grid')}
+            >
+              <label>
+                Rows: {config.rows}
+                <input
+                  type="range"
+                  min="2"
+                  max="20"
+                  value={config.rows}
+                  onChange={(e) => updateConfig({ rows: parseInt(e.target.value) })}
+                />
+              </label>
 
-            <label>
-              Columns: {config.cols}
-              <input
-                type="range"
-                min="2"
-                max="20"
-                value={config.cols}
-                onChange={(e) => updateConfig({ cols: parseInt(e.target.value) })}
-              />
-            </label>
+              <label>
+                Columns: {config.cols}
+                <input
+                  type="range"
+                  min="2"
+                  max="20"
+                  value={config.cols}
+                  onChange={(e) => updateConfig({ cols: parseInt(e.target.value) })}
+                />
+              </label>
 
-            <label>
-              Square Size: {config.squareSize} mm
-              <input
-                type="range"
-                min="20"
-                max="100"
-                value={config.squareSize}
-                onChange={(e) => updateConfig({ squareSize: parseInt(e.target.value) })}
-              />
-            </label>
+              <label>
+                Square Size: {config.squareSize} mm
+                <input
+                  type="range"
+                  min="20"
+                  max="100"
+                  value={config.squareSize}
+                  onChange={(e) => updateConfig({ squareSize: parseInt(e.target.value) })}
+                />
+              </label>
 
-            <label>
-              Brick Offset: {(config.offsetAmount * 100).toFixed(0)}%
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={config.offsetAmount * 100}
-                onChange={(e) => updateConfig({ offsetAmount: parseInt(e.target.value) / 100 })}
-              />
-            </label>
+              <label>
+                Brick Offset: {(config.offsetAmount * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={config.offsetAmount * 100}
+                  onChange={(e) => updateConfig({ offsetAmount: parseInt(e.target.value) / 100 })}
+                />
+              </label>
 
-            <label>
-              Width Variation: {(config.widthVariation * 100).toFixed(0)}%
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={config.widthVariation * 100}
-                onChange={(e) => updateConfig({ widthVariation: parseInt(e.target.value) / 100 })}
-              />
-              <small>How much rectangle widths vary within each row</small>
-            </label>
+              <label>
+                Width Variation: {(config.widthVariation * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={config.widthVariation * 100}
+                  onChange={(e) => updateConfig({ widthVariation: parseInt(e.target.value) / 100 })}
+                />
+                <small>How much rectangle widths vary within each row</small>
+              </label>
 
-            <label>
-              Height Variation: {(config.heightVariation * 100).toFixed(0)}%
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={config.heightVariation * 100}
-                onChange={(e) => updateConfig({ heightVariation: parseInt(e.target.value) / 100 })}
-              />
-              <small>How much row heights vary</small>
-            </label>
-          </section>
+              <label>
+                Height Variation: {(config.heightVariation * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={config.heightVariation * 100}
+                  onChange={(e) => updateConfig({ heightVariation: parseInt(e.target.value) / 100 })}
+                />
+                <small>How much row heights vary</small>
+              </label>
+            </CollapsibleSection>
 
-          <section>
-            <h2>Colors & Patterns</h2>
-            <label>
-              Number of Fabrics: {config.colors}
-              <input
-                type="range"
-                min="2"
-                max="5"
-                value={config.colors}
-                onChange={(e) => updateConfig({ colors: parseInt(e.target.value) })}
-              />
-            </label>
+            <CollapsibleSection
+              title="Colors & Patterns"
+              isCollapsed={!!collapsedSections['colors']}
+              onToggle={() => toggleSection('colors')}
+            >
+              <label>
+                Number of Fabrics: {config.colors}
+                <input
+                  type="range"
+                  min="2"
+                  max="5"
+                  value={config.colors}
+                  onChange={(e) => updateConfig({ colors: parseInt(e.target.value) })}
+                />
+              </label>
 
-            <label>
-              Split Probability: {(config.splitProbability * 100).toFixed(0)}%
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={config.splitProbability * 100}
-                onChange={(e) => updateConfig({ splitProbability: parseInt(e.target.value) / 100 })}
-              />
-              <small>Chance each rectangle gets split in two</small>
-            </label>
+              <label>
+                Split Probability: {(config.splitProbability * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={config.splitProbability * 100}
+                  onChange={(e) => updateConfig({ splitProbability: parseInt(e.target.value) / 100 })}
+                />
+                <small>Chance each rectangle gets split in two</small>
+              </label>
 
-            <label>
-              Split Angle Variation: {(config.splitAngleVariation * 100).toFixed(0)}%
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={config.splitAngleVariation * 100}
-                onChange={(e) => updateConfig({ splitAngleVariation: parseInt(e.target.value) / 100 })}
-              />
-              <small>0% = diagonal triangles, higher = angled quadrilaterals</small>
-            </label>
+              <label>
+                Split Angle Variation: {(config.splitAngleVariation * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={config.splitAngleVariation * 100}
+                  onChange={(e) => updateConfig({ splitAngleVariation: parseInt(e.target.value) / 100 })}
+                />
+                <small>0% = diagonal triangles, higher = angled quadrilaterals</small>
+              </label>
 
-            <label>
-              Same Color Adjacency: {(config.sameColorProbability * 100).toFixed(0)}%
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={config.sameColorProbability * 100}
-                onChange={(e) => updateConfig({ sameColorProbability: parseInt(e.target.value) / 100 })}
-              />
-              <small>Chance that same colors can touch (0% = never, 100% = always)</small>
-            </label>
+              <label>
+                Same Color Adjacency: {(config.sameColorProbability * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={config.sameColorProbability * 100}
+                  onChange={(e) => updateConfig({ sameColorProbability: parseInt(e.target.value) / 100 })}
+                />
+                <small>Chance that same colors can touch (0% = never, 100% = always)</small>
+              </label>
+            </CollapsibleSection>
 
+            <CollapsibleSection
+              title="Seam Allowance"
+              isCollapsed={!!collapsedSections['seam']}
+              onToggle={() => toggleSection('seam')}
+            >
+              <label>
+                Seam Allowance: {config.seamAllowance.toFixed(2)} mm
+                <input
+                  type="range"
+                  min="0"
+                  max="15"
+                  step="0.1"
+                  value={config.seamAllowance}
+                  onChange={(e) => updateConfig({ seamAllowance: parseFloat(e.target.value) })}
+                />
+                <small>6.35mm = ¼", 9.5mm = ⅜"</small>
+              </label>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={showSeamAllowance}
+                  onChange={(e) => setShowSeamAllowance(e.target.checked)}
+                />
+                Show Seam Allowance in Preview
+              </label>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Statistics"
+              isCollapsed={!!collapsedSections['stats']}
+              onToggle={() => toggleSection('stats')}
+            >
+              <p><strong>Total Pieces:</strong> {tessellation.pieces.length}</p>
+              <p><strong>Dimensions:</strong> {tessellation.bounds.width.toFixed(1)} × {tessellation.bounds.height.toFixed(1)} mm</p>
+              <p><strong>Triangles:</strong> {tessellation.pieces.filter(p => p.isTriangle).length}</p>
+              <p><strong>Squares:</strong> {tessellation.pieces.filter(p => !p.isTriangle).length}</p>
+            </CollapsibleSection>
+          </div>
+
+          <div className="controls-footer">
             <button onClick={handleRegenerateTessellation} className="regenerate-btn">
               🎲 Regenerate Pattern
             </button>
-          </section>
 
-          <section>
-            <h2>Seam Allowance</h2>
-            <label>
-              Seam Allowance: {config.seamAllowance.toFixed(2)} mm
-              <input
-                type="range"
-                min="0"
-                max="15"
-                step="0.1"
-                value={config.seamAllowance}
-                onChange={(e) => updateConfig({ seamAllowance: parseFloat(e.target.value) })}
-              />
-              <small>6.35mm = ¼", 9.5mm = ⅜"</small>
-            </label>
-
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={showSeamAllowance}
-                onChange={(e) => setShowSeamAllowance(e.target.checked)}
-              />
-              Show Seam Allowance in Preview
-            </label>
-          </section>
-
-          <section>
-            <h2>Export</h2>
             <button onClick={handleDownloadAll} className="export-btn">
               📥 Download Full Pattern
             </button>
 
-            <h3>By Fabric Color:</h3>
-            {Array.from(colorGroups.entries()).map(([colorIndex, pieces]) => (
-              <button
-                key={colorIndex}
-                onClick={() => handleDownloadByColor(colorIndex)}
-                className="color-export-btn"
-                style={{ backgroundColor: DEFAULT_PALETTE[colorIndex] }}
-              >
-                {FABRIC_NAMES[colorIndex]} ({pieces.length} pieces)
-              </button>
-            ))}
-          </section>
-
-          <section className="stats">
-            <h3>Statistics</h3>
-            <p><strong>Total Pieces:</strong> {tessellation.pieces.length}</p>
-            <p><strong>Dimensions:</strong> {tessellation.bounds.width.toFixed(1)} × {tessellation.bounds.height.toFixed(1)} mm</p>
-            <p><strong>Triangles:</strong> {tessellation.pieces.filter(p => p.isTriangle).length}</p>
-            <p><strong>Squares:</strong> {tessellation.pieces.filter(p => !p.isTriangle).length}</p>
-          </section>
+            <div className="color-exports">
+              <h3>By Fabric Color:</h3>
+              {Array.from(colorGroups.entries()).map(([colorIndex, pieces]) => (
+                <button
+                  key={colorIndex}
+                  onClick={() => handleDownloadByColor(colorIndex)}
+                  className="color-export-btn"
+                  style={{ backgroundColor: DEFAULT_PALETTE[colorIndex] }}
+                >
+                  {FABRIC_NAMES[colorIndex]} ({pieces.length} pieces)
+                </button>
+              ))}
+            </div>
+          </div>
         </aside>
 
         <main className="preview">
