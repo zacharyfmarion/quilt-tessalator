@@ -6,57 +6,44 @@ import { createRectangle, splitRectangle, offsetPolygon, calculateBounds } from 
  * variable widths, and optional splitting
  */
 export function generateTessellation(config: TessellationConfig): TessellationResult {
-  const pieces: TessellationPiece[] = [];
-  const { rows, cols, squareSize, colors, splitProbability, offsetAmount, widthVariation, splitAngleVariation } = config;
+  const { rows, cols, squareSize, colors, splitProbability, offsetAmount, widthVariation, heightVariation, splitAngleVariation, sameColorProbability } = config;
 
-  // Create a color grid first (we'll assign colors to avoid neighbors)
-  const colorGrid: number[][] = [];
-  for (let row = 0; row < rows; row++) {
-    colorGrid[row] = [];
-    for (let col = 0; col < cols; col++) {
-      colorGrid[row][col] = -1; // unassigned
-    }
-  }
-
-  // Assign colors using a greedy algorithm that avoids same-color neighbors
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      colorGrid[row][col] = assignColor(colorGrid, row, col, colors);
-    }
-  }
-
-  // Generate variable widths for each row
+  // STEP 1: Generate variable widths for each row
   const widths: number[][] = [];
   for (let row = 0; row < rows; row++) {
     widths[row] = generateRowWidths(cols, squareSize, widthVariation);
   }
 
-  // Generate pieces
+  // STEP 1b: Generate variable heights for each row
+  const heights = generateRowHeights(rows, squareSize, heightVariation);
+
+  // STEP 2: Create all polygons (without colors yet)
+  const pieces: TessellationPiece[] = [];
+
+  // Track cumulative Y position for variable heights
+  let cumulativeY = 0;
+
   for (let row = 0; row < rows; row++) {
     let cumulativeX = 0;
+    const height = heights[row];
 
     for (let col = 0; col < cols; col++) {
       // Calculate position with brick offset
       const offsetX = (row % 2) * offsetAmount * squareSize;
       const x = cumulativeX + offsetX;
-      const y = row * squareSize;
+      const y = cumulativeY;
       const width = widths[row][col];
 
       const shouldSplit = Math.random() < splitProbability;
-      const rect = createRectangle(x, y, width, squareSize);
+      const rect = createRectangle(x, y, width, height);
 
       if (shouldSplit) {
         const [piece1, piece2] = splitRectangle(rect, splitAngleVariation);
 
-        // Assign different colors to each split piece
-        const color1 = colorGrid[row][col];
-        // For the second piece, avoid the first piece's color AND grid neighbors
-        const color2 = assignColorForSplitPiece(colorGrid, row, col, colors, color1);
-
         pieces.push({
           id: `r${row}-c${col}-left`,
           polygon: piece1,
-          colorIndex: color1,
+          colorIndex: -1, // Assign later
           isTriangle: splitAngleVariation === 0,
           row,
           col,
@@ -66,7 +53,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
         pieces.push({
           id: `r${row}-c${col}-right`,
           polygon: piece2,
-          colorIndex: color2,
+          colorIndex: -1, // Assign later
           isTriangle: splitAngleVariation === 0,
           row,
           col,
@@ -76,7 +63,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
         pieces.push({
           id: `r${row}-c${col}-full`,
           polygon: rect,
-          colorIndex: colorGrid[row][col],
+          colorIndex: -1, // Assign later
           isTriangle: false,
           row,
           col,
@@ -86,7 +73,12 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
 
       cumulativeX += width;
     }
+
+    cumulativeY += height;
   }
+
+  // STEP 3: Assign colors based on actual polygon adjacency
+  assignColorsToPolygons(pieces, colors, sameColorProbability);
 
   // Calculate bounds
   const allPolygons = pieces.map(p => p.polygon);
@@ -100,6 +92,78 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
       height: bounds.maxY - bounds.minY,
     },
   };
+}
+
+/**
+ * Assign colors to all polygons based on actual adjacency
+ * Two polygons are adjacent if they share an edge
+ * @param sameColorProbability - probability (0-1) that same colors can be adjacent
+ */
+function assignColorsToPolygons(pieces: TessellationPiece[], numColors: number, sameColorProbability: number): void {
+  // Process pieces row by row, left to right
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i];
+    const forbiddenColors = new Set<number>();
+
+    // Check all previously colored pieces to see if they're adjacent
+    for (let j = 0; j < i; j++) {
+      const otherPiece = pieces[j];
+
+      // Skip if other piece doesn't have a color yet
+      if (otherPiece.colorIndex === -1) continue;
+
+      // Check if pieces share an edge
+      if (sharesEdge(piece.polygon, otherPiece.polygon)) {
+        // With sameColorProbability chance, allow this color anyway
+        if (Math.random() > sameColorProbability) {
+          forbiddenColors.add(otherPiece.colorIndex);
+        }
+      }
+    }
+
+    // Find available colors (those not forbidden)
+    const availableColors: number[] = [];
+    for (let c = 0; c < numColors; c++) {
+      if (!forbiddenColors.has(c)) {
+        availableColors.push(c);
+      }
+    }
+
+    // Assign a random color from available colors
+    if (availableColors.length > 0) {
+      piece.colorIndex = availableColors[Math.floor(Math.random() * availableColors.length)];
+    } else {
+      // Fallback: if all colors are forbidden (shouldn't happen with 3+ colors), pick randomly
+      piece.colorIndex = Math.floor(Math.random() * numColors);
+    }
+  }
+}
+
+/**
+ * Check if two polygons share an edge (are adjacent)
+ * Two polygons share an edge if they have at least 2 consecutive points in common
+ */
+function sharesEdge(poly1: TessellationPiece['polygon'], poly2: TessellationPiece['polygon']): boolean {
+  const tolerance = 0.01; // Small tolerance for floating point comparison
+
+  // Helper to check if two points are the same
+  const samePoint = (p1: { x: number; y: number }, p2: { x: number; y: number }) => {
+    return Math.abs(p1.x - p2.x) < tolerance && Math.abs(p1.y - p2.y) < tolerance;
+  };
+
+  // Count how many points from poly1 are in poly2
+  let sharedPoints = 0;
+  for (const p1 of poly1) {
+    for (const p2 of poly2) {
+      if (samePoint(p1, p2)) {
+        sharedPoints++;
+        break;
+      }
+    }
+  }
+
+  // Two polygons share an edge if they have at least 2 points in common
+  return sharedPoints >= 2;
 }
 
 /**
@@ -129,98 +193,29 @@ function generateRowWidths(cols: number, baseSize: number, variation: number): n
 }
 
 /**
- * Assign a color to a cell that's different from its neighbors
+ * Generate variable heights for each row
+ * Returns an array of heights that maintains the overall total height
  */
-function assignColor(grid: number[][], row: number, col: number, numColors: number): number {
-  const neighborColors = new Set<number>();
-
-  // Check all adjacent cells (including diagonals for better dispersion)
-  const neighbors = [
-    [row - 1, col - 1], [row - 1, col], [row - 1, col + 1],
-    [row, col - 1],                     [row, col + 1],
-    [row + 1, col - 1], [row + 1, col], [row + 1, col + 1],
-  ];
-
-  for (const [r, c] of neighbors) {
-    if (r >= 0 && r < grid.length && c >= 0 && c < grid[0].length) {
-      const color = grid[r][c];
-      if (color !== -1) {
-        neighborColors.add(color);
-      }
-    }
+function generateRowHeights(rows: number, baseSize: number, variation: number): number[] {
+  if (variation === 0) {
+    return new Array(rows).fill(baseSize);
   }
 
-  // Find available colors
-  const availableColors: number[] = [];
-  for (let i = 0; i < numColors; i++) {
-    if (!neighborColors.has(i)) {
-      availableColors.push(i);
-    }
+  const heights: number[] = [];
+  const targetTotal = rows * baseSize;
+
+  // Generate random variations
+  for (let i = 0; i < rows; i++) {
+    // Random factor between (1 - variation) and (1 + variation)
+    const factor = 1 + (Math.random() * 2 - 1) * variation;
+    heights.push(baseSize * factor);
   }
 
-  // If all colors are used by neighbors (unlikely with 3+ colors), pick randomly
-  if (availableColors.length === 0) {
-    return Math.floor(Math.random() * numColors);
-  }
+  // Normalize to maintain target total height
+  const currentTotal = heights.reduce((sum, h) => sum + h, 0);
+  const scale = targetTotal / currentTotal;
 
-  // Pick randomly from available colors
-  return availableColors[Math.floor(Math.random() * availableColors.length)];
-}
-
-/**
- * Assign a color to a split piece that avoids both grid neighbors AND its sibling piece
- */
-function assignColorForSplitPiece(
-  grid: number[][],
-  row: number,
-  col: number,
-  numColors: number,
-  siblingColor: number
-): number {
-  const neighborColors = new Set<number>();
-
-  // Add the sibling piece's color (they share an edge)
-  neighborColors.add(siblingColor);
-
-  // Check all adjacent cells (including diagonals for better dispersion)
-  const neighbors = [
-    [row - 1, col - 1], [row - 1, col], [row - 1, col + 1],
-    [row, col - 1],                     [row, col + 1],
-    [row + 1, col - 1], [row + 1, col], [row + 1, col + 1],
-  ];
-
-  for (const [r, c] of neighbors) {
-    if (r >= 0 && r < grid.length && c >= 0 && c < grid[0].length) {
-      const color = grid[r][c];
-      if (color !== -1) {
-        neighborColors.add(color);
-      }
-    }
-  }
-
-  // Find available colors
-  const availableColors: number[] = [];
-  for (let i = 0; i < numColors; i++) {
-    if (!neighborColors.has(i)) {
-      availableColors.push(i);
-    }
-  }
-
-  // If all colors are used by neighbors, pick randomly but avoid sibling
-  if (availableColors.length === 0) {
-    const colors: number[] = [];
-    for (let i = 0; i < numColors; i++) {
-      if (i !== siblingColor) {
-        colors.push(i);
-      }
-    }
-    return colors.length > 0
-      ? colors[Math.floor(Math.random() * colors.length)]
-      : Math.floor(Math.random() * numColors);
-  }
-
-  // Pick randomly from available colors
-  return availableColors[Math.floor(Math.random() * availableColors.length)];
+  return heights.map(h => h * scale);
 }
 
 /**

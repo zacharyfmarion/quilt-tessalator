@@ -13,7 +13,9 @@ const DEFAULT_CONFIG: TessellationConfig = {
   seamAllowance: 6.35, // 1/4 inch in mm
   offsetAmount: 0.5, // brick pattern offset
   widthVariation: 0.3, // 30% width variation
+  heightVariation: 0.2, // 20% height variation
   splitAngleVariation: 0.5, // moderate angle variation
+  sameColorProbability: 0.1, // 10% chance of same color adjacency
 };
 
 const DEFAULT_PALETTE = [
@@ -141,6 +143,18 @@ function App() {
               />
               <small>How much rectangle widths vary within each row</small>
             </label>
+
+            <label>
+              Height Variation: {(config.heightVariation * 100).toFixed(0)}%
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={config.heightVariation * 100}
+                onChange={(e) => updateConfig({ heightVariation: parseInt(e.target.value) / 100 })}
+              />
+              <small>How much row heights vary</small>
+            </label>
           </section>
 
           <section>
@@ -178,6 +192,18 @@ function App() {
                 onChange={(e) => updateConfig({ splitAngleVariation: parseInt(e.target.value) / 100 })}
               />
               <small>0% = diagonal triangles, higher = angled quadrilaterals</small>
+            </label>
+
+            <label>
+              Same Color Adjacency: {(config.sameColorProbability * 100).toFixed(0)}%
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={config.sameColorProbability * 100}
+                onChange={(e) => updateConfig({ sameColorProbability: parseInt(e.target.value) / 100 })}
+              />
+              <small>Chance that same colors can touch (0% = never, 100% = always)</small>
             </label>
 
             <button onClick={handleRegenerateTessellation} className="regenerate-btn">

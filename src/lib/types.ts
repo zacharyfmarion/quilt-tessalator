@@ -21,7 +21,9 @@ export interface TessellationConfig {
   seamAllowance: number; // in same units as squareSize
   offsetAmount: number; // 0-1, how much each row is offset (0.5 = half brick)
   widthVariation: number; // 0-1, how much width can vary (0 = no variation, 1 = +/- 100%)
+  heightVariation: number; // 0-1, how much row heights can vary (0 = no variation, 1 = +/- 100%)
   splitAngleVariation: number; // 0-1, how much the split angle varies from 45° (creates quads instead of triangles)
+  sameColorProbability: number; // 0-1, chance that same colors can be adjacent (0 = never, 1 = always allowed)
 }
 
 export interface TessellationResult {
