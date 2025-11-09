@@ -1,6 +1,7 @@
 import { TessellationPiece, Polygon } from './types';
 import { offsetPolygon } from './geometry';
 import { polygonToPath } from './svg';
+import { AnyNest, FloatPolygon, Placement } from 'any-nest';
 
 export interface PackedPiece {
   piece: TessellationPiece;
@@ -16,78 +17,137 @@ export interface PackedResult {
   efficiency: number; // 0-100 percentage
 }
 
+export interface PackingOptions {
+  sheetWidth: number;
+  sheetHeight: number;
+  seamAllowance: number;
+  spacing: number;
+}
+
 /**
- * Simple grid-based packing (placeholder for SVGNest integration)
- * TODO: Replace with any-nest when integrated
+ * Convert our Polygon format to any-nest FloatPolygon format
  */
-export function packPolygons(
+function toFloatPolygon(polygon: Polygon, id: string): FloatPolygon {
+  return FloatPolygon.fromPoints(
+    polygon.map(p => ({ x: p.x, y: p.y })),
+    id
+  );
+}
+
+/**
+ * Pack polygons using any-nest library
+ */
+export async function packPolygons(
   pieces: TessellationPiece[],
-  seamAllowance: number,
-  spacing: number
-): PackedResult {
+  options: PackingOptions
+): Promise<PackedResult> {
+  const { sheetWidth, sheetHeight, seamAllowance, spacing } = options;
+
   // Apply seam allowance to all pieces first
   const piecesWithSeams = pieces.map(piece => ({
     ...piece,
     polygon: offsetPolygon(piece.polygon, seamAllowance)
   }));
 
-  // Simple grid packing as placeholder
-  // Calculate bounding box for each piece
-  const pieceBounds = piecesWithSeams.map(piece => {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const point of piece.polygon) {
-      minX = Math.min(minX, point.x);
-      minY = Math.min(minY, point.y);
-      maxX = Math.max(maxX, point.x);
-      maxY = Math.max(maxY, point.y);
-    }
-    return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+  // Create bin (sheet) as a rectangle
+  const bin = FloatPolygon.fromPoints([
+    { x: 0, y: 0 },
+    { x: sheetWidth, y: 0 },
+    { x: sheetWidth, y: sheetHeight },
+    { x: 0, y: sheetHeight }
+  ], 'bin');
+
+  // Convert pieces to FloatPolygon format
+  const parts = piecesWithSeams.map(piece =>
+    toFloatPolygon(piece.polygon, piece.id)
+  );
+
+  // Create and configure nester
+  const nester = new AnyNest();
+
+  // IMPORTANT: Config must be set before bin and parts
+  nester.config({
+    spacing: spacing,
+    rotations: 360, // Allow any rotation angle (1 degree increments)
+    populationSize: 20, // Larger population for better results
+    mutationRate: 10,
+    useHoles: false,
+    exploreConcave: false
   });
 
-  // Grid packing
-  const packed: PackedPiece[] = [];
-  let currentX = spacing;
-  let currentY = spacing;
-  let rowHeight = 0;
-  const sheetMaxWidth = 1000; // mm - adjust as needed
+  nester.setBin(bin);
+  nester.setParts(parts);
 
-  piecesWithSeams.forEach((piece, i) => {
-    const bounds = pieceBounds[i];
+  // Run nesting algorithm
+  return new Promise<PackedResult>((resolve, reject) => {
+    let bestResult: PackedResult | null = null;
+    let iterationCount = 0;
+    const maxIterations = 10; // Let algorithm run for 10 generations
 
-    // Check if we need a new row
-    if (currentX + bounds.width > sheetMaxWidth && packed.length > 0) {
-      currentX = spacing;
-      currentY += rowHeight + spacing;
-      rowHeight = 0;
-    }
+    nester.start(
+      (progress: number) => {
+        // Progress callback - could be used for UI updates
+        console.log('Nesting progress:', (progress * 100).toFixed(1) + '%');
+      },
+      (placements: Placement[][], utilization: number) => {
+        iterationCount++;
+        console.log(`Iteration ${iterationCount}, Utilization: ${(utilization * 100).toFixed(1)}%`);
 
-    // Place piece
-    packed.push({
-      piece: piece,
-      x: currentX - bounds.minX,
-      y: currentY - bounds.minY,
-      rotation: 0
-    });
+        if (!placements || placements.length === 0 || placements[0].length === 0) {
+          console.warn('Any-nest could not find valid placement');
+          return;
+        }
 
-    currentX += bounds.width + spacing;
-    rowHeight = Math.max(rowHeight, bounds.height);
+        // Convert placements to our format
+        const packed: PackedPiece[] = [];
+
+        for (const placement of placements[0]) {
+          const piece = piecesWithSeams.find(p => p.id === placement.id);
+          if (piece) {
+            packed.push({
+              piece: piece,
+              x: placement.translate.x,
+              y: placement.translate.y,
+              rotation: placement.rotate
+            });
+          }
+        }
+
+        // Calculate efficiency
+        const totalArea = piecesWithSeams.reduce((sum, piece) => {
+          return sum + calculatePolygonArea(piece.polygon);
+        }, 0);
+        const sheetArea = sheetWidth * sheetHeight;
+        const efficiency = (totalArea / sheetArea) * 100;
+
+        // Update best result
+        bestResult = {
+          pieces: packed,
+          sheetWidth,
+          sheetHeight,
+          efficiency
+        };
+
+        // Stop after maxIterations generations to get a good result
+        if (iterationCount >= maxIterations) {
+          console.log(`Stopping after ${iterationCount} iterations with ${efficiency.toFixed(1)}% efficiency`);
+          nester.stop();
+          resolve(bestResult);
+        }
+      }
+    );
+
+    // Timeout after 30 seconds as safety measure
+    setTimeout(() => {
+      console.log('Packing timeout reached');
+      nester.stop();
+      if (bestResult) {
+        resolve(bestResult);
+      } else {
+        reject(new Error('No valid packing found within timeout period'));
+      }
+    }, 30000);
   });
-
-  const sheetHeight = currentY + rowHeight + spacing;
-
-  // Calculate efficiency
-  const totalArea = piecesWithSeams.reduce((sum, piece) => {
-    return sum + calculatePolygonArea(piece.polygon);
-  }, 0);
-  const sheetArea = sheetMaxWidth * sheetHeight;
-  const efficiency = (totalArea / sheetArea) * 100;
-
-  return {
-    pieces: packed,
-    sheetWidth: sheetMaxWidth,
-    sheetHeight,
-    efficiency
-  };
 }
 
 /**
