@@ -4,11 +4,47 @@ import { generateTessellation, applySeamAllowance, groupByColor } from './lib/te
 import { generateFullSVG, generateColorSVG, downloadSVG } from './lib/svg';
 import './App.css';
 
+/**
+ * Generate a random, visually distinct color
+ */
+const generateRandomColor = (): string => {
+  const hue = Math.floor(Math.random() * 360);
+  const saturation = 40 + Math.floor(Math.random() * 40); // 40-80%
+  const lightness = 40 + Math.floor(Math.random() * 20); // 40-60%
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+};
+
+/**
+ * Generate initial color palette based on count
+ * Uses nice default denim colors for first 3, then generates random colors
+ */
+const generateInitialPalette = (count: number): string[] => {
+  const defaults = ['#4A90E2', '#2C3E50', '#1A1F3A'];
+  const palette = defaults.slice(0, Math.min(count, defaults.length));
+
+  while (palette.length < count) {
+    palette.push(generateRandomColor());
+  }
+  return palette;
+};
+
+/**
+ * Generate equal probability distribution for N colors
+ */
+const generateEqualProbabilities = (count: number): number[] => {
+  const base = Math.floor(10000 / count) / 100;
+  const probs = Array(count).fill(base);
+  probs[count - 1] = 100 - (base * (count - 1));
+  return probs;
+};
+
+const DEFAULT_COLORS = 3;
+
 const DEFAULT_CONFIG: TessellationConfig = {
   rows: 8,
   cols: 10,
   squareSize: 50, // mm
-  colors: 3,
+  colors: DEFAULT_COLORS,
   splitProbability: 0.4,
   seamAllowance: 6.35, // 1/4 inch in mm
   offsetAmount: 0.5, // brick pattern offset
@@ -16,23 +52,10 @@ const DEFAULT_CONFIG: TessellationConfig = {
   heightVariation: 0.2, // 20% height variation
   splitAngleVariation: 0.5, // moderate angle variation
   sameColorProbability: 0.1, // 10% chance of same color adjacency
+  colorProbabilities: generateEqualProbabilities(DEFAULT_COLORS),
 };
 
-const DEFAULT_PALETTE = [
-  '#4A90E2', // light denim blue
-  '#2C3E50', // dark denim
-  '#1A1F3A', // even darker blue
-  '#E74C3C', // additional color
-  '#27AE60', // additional color
-];
-
-const FABRIC_NAMES = [
-  'Light Denim',
-  'Dark Denim',
-  'Darker Denim',
-  'Fabric 4',
-  'Fabric 5',
-];
+const getColorName = (index: number) => `Color ${index + 1}`;
 
 interface CollapsibleSectionProps {
   title: string;
@@ -57,6 +80,7 @@ function App() {
   const [config, setConfig] = useState<TessellationConfig>(DEFAULT_CONFIG);
   const [showSeamAllowance, setShowSeamAllowance] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [palette, setPalette] = useState<string[]>(() => generateInitialPalette(DEFAULT_COLORS));
 
   // Generate base tessellation (without seam allowance)
   const baseTessellation = useMemo(() => {
@@ -69,18 +93,66 @@ function App() {
   }, [baseTessellation, showSeamAllowance]);
 
   const svg = useMemo(() => {
-    return generateFullSVG(tessellation, DEFAULT_PALETTE, {
+    return generateFullSVG(tessellation, palette, {
       showSeamAllowance,
       units: 'mm',
     });
-  }, [tessellation, showSeamAllowance]);
+  }, [tessellation, palette, showSeamAllowance]);
 
   const colorGroups = useMemo(() => {
     return groupByColor(tessellation);
   }, [tessellation]);
 
   const updateConfig = (partial: Partial<TessellationConfig>) => {
-    setConfig(prev => ({ ...prev, ...partial }));
+    setConfig(prev => {
+      const newConfig = { ...prev, ...partial };
+
+      // If colors changed, dynamically adjust palette and probabilities
+      if (partial.colors !== undefined && partial.colors !== prev.colors) {
+        let newPalette = [...palette];
+        let newProbs = [...newConfig.colorProbabilities];
+
+        if (partial.colors > prev.colors) {
+          // Adding colors: generate new random colors and probabilities
+          const toAdd = partial.colors - prev.colors;
+          for (let i = 0; i < toAdd; i++) {
+            newPalette.push(generateRandomColor());
+            newProbs.push(100 / partial.colors); // equal share initially
+          }
+        } else {
+          // Removing colors: slice arrays to new size
+          newPalette = newPalette.slice(0, partial.colors);
+          newProbs = newProbs.slice(0, partial.colors);
+        }
+
+        // Renormalize all probabilities to sum to 100%
+        const total = newProbs.reduce((sum, p) => sum + p, 0);
+        if (total > 0) {
+          newProbs = newProbs.map(p => (p / total) * 100);
+        }
+
+        setPalette(newPalette);
+        newConfig.colorProbabilities = newProbs;
+      }
+
+      return newConfig;
+    });
+  };
+
+  const updateColorProbability = (colorIndex: number, value: number) => {
+    const newProbabilities = [...config.colorProbabilities];
+    newProbabilities[colorIndex] = value;
+
+    // Normalize only the active colors to sum to 100
+    const activeProbs = newProbabilities.slice(0, config.colors);
+    const total = activeProbs.reduce((sum, p) => sum + p, 0);
+
+    if (total > 0) {
+      for (let i = 0; i < config.colors; i++) {
+        newProbabilities[i] = (newProbabilities[i] / total) * 100;
+      }
+      updateConfig({ colorProbabilities: newProbabilities });
+    }
   };
 
   const handleDownloadAll = () => {
@@ -91,9 +163,15 @@ function App() {
     const pieces = colorGroups.get(colorIndex);
     if (!pieces) return;
 
-    const fabricName = FABRIC_NAMES[colorIndex];
-    const colorSvg = generateColorSVG(pieces, fabricName, { units: 'mm' });
-    downloadSVG(colorSvg, `tessellation-${fabricName.toLowerCase().replace(' ', '-')}.svg`);
+    const colorName = getColorName(colorIndex);
+    const colorSvg = generateColorSVG(pieces, colorName, { units: 'mm' });
+    downloadSVG(colorSvg, `tessellation-${colorName.toLowerCase().replace(' ', '-')}.svg`);
+  };
+
+  const updatePaletteColor = (colorIndex: number, newColor: string) => {
+    const newPalette = [...palette];
+    newPalette[colorIndex] = newColor;
+    setPalette(newPalette);
   };
 
   const handleRegenerateTessellation = () => {
@@ -111,8 +189,7 @@ function App() {
   return (
     <div className="app">
       <header>
-        <h1>Quilted Denim Tessellation Generator</h1>
-        <p>Create brick-pattern tessellations for laser-cut quilted garments</p>
+        <h1>Quilted Tessellation Generator</h1>
       </header>
 
       <div className="container">
@@ -198,7 +275,7 @@ function App() {
               onToggle={() => toggleSection('colors')}
             >
               <label>
-                Number of Fabrics: {config.colors}
+                Number of Colors: {config.colors}
                 <input
                   type="range"
                   min="2"
@@ -207,6 +284,41 @@ function App() {
                   onChange={(e) => updateConfig({ colors: parseInt(e.target.value) })}
                 />
               </label>
+
+              <h3>Color Probabilities:</h3>
+              {Array.from({ length: config.colors }, (_, i) => (
+                <div key={i} style={{ marginBottom: '1rem' }}>
+                  <label>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <input
+                        type="color"
+                        value={palette[i]}
+                        onChange={(e) => updatePaletteColor(i, e.target.value)}
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          border: '1px solid #ccc',
+                          borderRadius: '3px',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      {getColorName(i)}: {config.colorProbabilities[i].toFixed(1)}%
+                    </span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={config.colorProbabilities[i]}
+                      onChange={(e) => updateColorProbability(i, parseFloat(e.target.value))}
+                    />
+                  </label>
+                </div>
+              ))}
+              <small style={{ display: 'block', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                Total: {config.colorProbabilities.slice(0, config.colors).reduce((sum, p) => sum + p, 0).toFixed(1)}%
+                (auto-normalized to 100%)
+              </small>
 
               <label>
                 Split Probability: {(config.splitProbability * 100).toFixed(0)}%
@@ -295,15 +407,15 @@ function App() {
             </button>
 
             <div className="color-exports">
-              <h3>By Fabric Color:</h3>
+              <h3>By Color:</h3>
               {Array.from(colorGroups.entries()).map(([colorIndex, pieces]) => (
                 <button
                   key={colorIndex}
                   onClick={() => handleDownloadByColor(colorIndex)}
                   className="color-export-btn"
-                  style={{ backgroundColor: DEFAULT_PALETTE[colorIndex] }}
+                  style={{ backgroundColor: palette[colorIndex] }}
                 >
-                  {FABRIC_NAMES[colorIndex]} ({pieces.length} pieces)
+                  {getColorName(colorIndex)} ({pieces.length} pieces)
                 </button>
               ))}
             </div>

@@ -86,55 +86,71 @@ export function splitSquareIntoTriangles(
 }
 
 /**
- * Simple polygon offset (expand/contract)
- * This is a basic implementation - for production, use clipper2-js
+ * Simple polygon offset for quilting seam allowances
+ * Moves each edge outward perpendicular to itself by the offset amount
+ * Then finds the intersection points of adjacent offset edges
  */
 export function offsetPolygon(polygon: Polygon, offset: number): Polygon {
   if (offset === 0) return polygon;
 
-  // For convex polygons (our squares and triangles), we can use a simple approach
-  // Move each point outward perpendicular to its edges
-  const result: Point[] = [];
   const n = polygon.length;
+  const result: Point[] = [];
 
+  // For each vertex, calculate where the two adjacent offset edges intersect
   for (let i = 0; i < n; i++) {
-    const prev = polygon[(i - 1 + n) % n];
     const curr = polygon[i];
     const next = polygon[(i + 1) % n];
+    const prev = polygon[(i - 1 + n) % n];
 
-    // Get edge vectors
-    const v1 = { x: curr.x - prev.x, y: curr.y - prev.y };
-    const v2 = { x: next.x - curr.x, y: next.y - curr.y };
+    // Get the two edges adjacent to this vertex
+    const edge1 = { x: curr.x - prev.x, y: curr.y - prev.y };
+    const edge2 = { x: next.x - curr.x, y: next.y - curr.y };
 
-    // Normalize
-    const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-    const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-    v1.x /= len1; v1.y /= len1;
-    v2.x /= len2; v2.y /= len2;
+    // Normalize the edges
+    const len1 = Math.sqrt(edge1.x * edge1.x + edge1.y * edge1.y);
+    const len2 = Math.sqrt(edge2.x * edge2.x + edge2.y * edge2.y);
+    edge1.x /= len1;
+    edge1.y /= len1;
+    edge2.x /= len2;
+    edge2.y /= len2;
 
-    // Get perpendiculars (outward normals)
-    const n1 = { x: -v1.y, y: v1.x };
-    const n2 = { x: -v2.y, y: v2.x };
+    // Get perpendiculars pointing outward (rotate 90° counterclockwise for outward normal)
+    const perp1 = { x: -edge1.y, y: edge1.x };
+    const perp2 = { x: -edge2.y, y: edge2.x };
 
-    // Average normal at corner
-    const avgNormal = {
-      x: (n1.x + n2.x) / 2,
-      y: (n1.y + n2.y) / 2,
-    };
+    // Move the edges outward by offset amount
+    // Edge 1 goes from (prev + perp1*offset) to (curr + perp1*offset)
+    // Edge 2 goes from (curr + perp2*offset) to (next + perp2*offset)
 
-    // Normalize
-    const avgLen = Math.sqrt(avgNormal.x * avgNormal.x + avgNormal.y * avgNormal.y);
-    avgNormal.x /= avgLen;
-    avgNormal.y /= avgLen;
+    // Points on the offset edges
+    const p1 = { x: prev.x + perp1.x * offset, y: prev.y + perp1.y * offset };
+    const p2 = { x: curr.x + perp1.x * offset, y: curr.y + perp1.y * offset };
+    const p3 = { x: curr.x + perp2.x * offset, y: curr.y + perp2.y * offset };
+    const p4 = { x: next.x + perp2.x * offset, y: next.y + perp2.y * offset };
 
-    // Calculate miter length (to maintain offset distance)
-    const sinHalfAngle = Math.sqrt((1 - (n1.x * n2.x + n1.y * n2.y)) / 2);
-    const miterLength = sinHalfAngle > 0.01 ? offset / sinHalfAngle : offset;
+    // Find intersection of the two offset edges
+    // Line 1: p1 + t * (p2 - p1)
+    // Line 2: p3 + s * (p4 - p3)
+    const d1 = { x: p2.x - p1.x, y: p2.y - p1.y };
+    const d2 = { x: p4.x - p3.x, y: p4.y - p3.y };
 
-    result.push({
-      x: curr.x + avgNormal.x * miterLength,
-      y: curr.y + avgNormal.y * miterLength,
-    });
+    // Solve for intersection
+    const denom = d1.x * d2.y - d1.y * d2.x;
+
+    if (Math.abs(denom) > 0.0001) {
+      // Lines intersect
+      const t = ((p3.x - p1.x) * d2.y - (p3.y - p1.y) * d2.x) / denom;
+      result.push({
+        x: p1.x + t * d1.x,
+        y: p1.y + t * d1.y
+      });
+    } else {
+      // Lines are parallel (shouldn't happen often), use average
+      result.push({
+        x: (p2.x + p3.x) / 2,
+        y: (p2.y + p3.y) / 2
+      });
+    }
   }
 
   return result;

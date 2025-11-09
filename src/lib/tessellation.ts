@@ -6,7 +6,7 @@ import { createRectangle, splitRectangle, offsetPolygon, calculateBounds } from 
  * variable widths, and optional splitting
  */
 export function generateTessellation(config: TessellationConfig): TessellationResult {
-  const { rows, cols, squareSize, colors, splitProbability, offsetAmount, widthVariation, heightVariation, splitAngleVariation, sameColorProbability } = config;
+  const { rows, cols, squareSize, colors, splitProbability, offsetAmount, widthVariation, heightVariation, splitAngleVariation, sameColorProbability, colorProbabilities } = config;
 
   // STEP 1: Generate variable widths for each row
   const widths: number[][] = [];
@@ -78,7 +78,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
   }
 
   // STEP 3: Assign colors based on actual polygon adjacency
-  assignColorsToPolygons(pieces, colors, sameColorProbability);
+  assignColorsToPolygons(pieces, colors, sameColorProbability, colorProbabilities);
 
   // Calculate bounds
   const allPolygons = pieces.map(p => p.polygon);
@@ -98,8 +98,14 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
  * Assign colors to all polygons based on actual adjacency
  * Two polygons are adjacent if they share an edge
  * @param sameColorProbability - probability (0-1) that same colors can be adjacent
+ * @param colorProbabilities - array of desired percentages (0-100) for each color
  */
-function assignColorsToPolygons(pieces: TessellationPiece[], numColors: number, sameColorProbability: number): void {
+function assignColorsToPolygons(
+  pieces: TessellationPiece[],
+  numColors: number,
+  sameColorProbability: number,
+  colorProbabilities: number[]
+): void {
   // Process pieces row by row, left to right
   for (let i = 0; i < pieces.length; i++) {
     const piece = pieces[i];
@@ -129,14 +135,44 @@ function assignColorsToPolygons(pieces: TessellationPiece[], numColors: number, 
       }
     }
 
-    // Assign a random color from available colors
+    // Assign a weighted random color from available colors
     if (availableColors.length > 0) {
-      piece.colorIndex = availableColors[Math.floor(Math.random() * availableColors.length)];
+      piece.colorIndex = weightedRandomColor(availableColors, colorProbabilities);
     } else {
       // Fallback: if all colors are forbidden (shouldn't happen with 3+ colors), pick randomly
       piece.colorIndex = Math.floor(Math.random() * numColors);
     }
   }
+}
+
+/**
+ * Select a random color from available colors using weighted probabilities
+ */
+function weightedRandomColor(availableColors: number[], colorProbabilities: number[]): number {
+  // Get weights for available colors only
+  const weights = availableColors.map(c => colorProbabilities[c] || 0);
+
+  // Calculate total weight
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+
+  // If all weights are 0, use uniform distribution
+  if (totalWeight === 0) {
+    return availableColors[Math.floor(Math.random() * availableColors.length)];
+  }
+
+  // Pick a random number between 0 and totalWeight
+  let random = Math.random() * totalWeight;
+
+  // Find which color this falls into
+  for (let i = 0; i < availableColors.length; i++) {
+    random -= weights[i];
+    if (random <= 0) {
+      return availableColors[i];
+    }
+  }
+
+  // Fallback (shouldn't reach here due to floating point)
+  return availableColors[availableColors.length - 1];
 }
 
 /**
