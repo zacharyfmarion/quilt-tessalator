@@ -351,21 +351,87 @@ button:active {
 
 .preview {
   flex: 1;
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  height: 100%;
+}
+
+.preview-tabs:first-child {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.preview-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  background: var(--light);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.preview-tabs .tab {
+  padding: 1rem 2rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-right: 1px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  margin: 0;
+  box-shadow: none;
+  position: relative;
+}
+
+.preview-tabs .tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.5);
+  transform: none;
+}
+
+.preview-tabs .tab:active {
+  transform: none;
+}
+
+.preview-tabs .tab.active {
+  color: var(--primary);
+  background: white;
+  border-bottom-color: var(--primary);
+  border-right-color: var(--border);
+  font-weight: 600;
+}
+
+.preview-tabs .tab.active + .tab {
+  border-left: 1px solid var(--border);
+}
+
+.preview-tabs .tab::before {
+  display: none;
+}
+
+.preview-content {
+  flex: 1;
   background:
     linear-gradient(to right, var(--light-gray) 1px, transparent 1px),
     linear-gradient(to bottom, var(--light-gray) 1px, transparent 1px);
   background-size: 20px 20px;
   background-color: white;
-  border-radius: var(--radius-lg);
-  padding: 1rem;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  height: 100%;
 }
 
 .svg-container {

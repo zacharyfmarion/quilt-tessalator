@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { TessellationConfig } from './lib/types';
 import { generateTessellation, applySeamAllowance, groupByColor } from './lib/tessellation';
 import { generateFullSVG, generateColorSVG, downloadSVG } from './lib/svg';
+import { packPolygons, generatePackedSVG, PackedResult } from './lib/packing';
 import './App.css';
 
 /**
@@ -76,11 +77,15 @@ function CollapsibleSection({ title, isCollapsed, onToggle, children }: Collapsi
   );
 }
 
+type ViewTab = 'full' | `color-${number}`;
+
 function App() {
   const [config, setConfig] = useState<TessellationConfig>(DEFAULT_CONFIG);
   const [showSeamAllowance, setShowSeamAllowance] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [palette, setPalette] = useState<string[]>(() => generateInitialPalette(DEFAULT_COLORS));
+  const [packingSpacing, setPackingSpacing] = useState(3); // mm
+  const [activeTab, setActiveTab] = useState<ViewTab>('full');
 
   // Generate base tessellation (without seam allowance)
   const baseTessellation = useMemo(() => {
@@ -102,6 +107,18 @@ function App() {
   const colorGroups = useMemo(() => {
     return groupByColor(tessellation);
   }, [tessellation]);
+
+  // Generate packed layouts for each color
+  const packedLayouts = useMemo(() => {
+    const layouts = new Map<number, PackedResult>();
+
+    colorGroups.forEach((pieces, colorIndex) => {
+      const packed = packPolygons(pieces, config.seamAllowance, packingSpacing);
+      layouts.set(colorIndex, packed);
+    });
+
+    return layouts;
+  }, [colorGroups, config.seamAllowance, packingSpacing]);
 
   const updateConfig = (partial: Partial<TessellationConfig>) => {
     setConfig(prev => {
@@ -155,8 +172,19 @@ function App() {
     }
   };
 
-  const handleDownloadAll = () => {
-    downloadSVG(svg, 'tessellation-full.svg');
+  const handleDownloadCurrent = () => {
+    if (activeTab === 'full') {
+      downloadSVG(svg, 'tessellation-full.svg');
+    } else {
+      const colorIndex = parseInt(activeTab.split('-')[1]);
+      const packed = packedLayouts.get(colorIndex);
+      if (!packed) return;
+
+      const packedSvg = generatePackedSVG(packed, getColorName(colorIndex), {
+        units: 'mm'
+      });
+      downloadSVG(packedSvg, `tessellation-${getColorName(colorIndex).toLowerCase().replace(' ', '-')}-packed.svg`);
+    }
   };
 
   const handleDownloadByColor = (colorIndex: number) => {
@@ -383,6 +411,19 @@ function App() {
                 />
                 Show Seam Allowance in Preview
               </label>
+
+              <label>
+                Packing Spacing: {packingSpacing.toFixed(1)} mm
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  step="0.5"
+                  value={packingSpacing}
+                  onChange={(e) => setPackingSpacing(parseFloat(e.target.value))}
+                />
+                <small>Space between pieces when packing for laser cutting</small>
+              </label>
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -402,8 +443,8 @@ function App() {
               🎲 Regenerate Pattern
             </button>
 
-            <button onClick={handleDownloadAll} className="export-btn">
-              📥 Download Full Pattern
+            <button onClick={handleDownloadCurrent} className="export-btn">
+              📥 Download {activeTab === 'full' ? 'Full Pattern' : 'Current Packing'}
             </button>
 
             <div className="color-exports">
@@ -423,10 +464,42 @@ function App() {
         </aside>
 
         <main className="preview">
-          <div
-            className="svg-container"
-            dangerouslySetInnerHTML={{ __html: svg }}
-          />
+          <div className="preview-tabs">
+            <button
+              className={activeTab === 'full' ? 'tab active' : 'tab'}
+              onClick={() => setActiveTab('full')}
+            >
+              Full Pattern
+            </button>
+            {Array.from(colorGroups.keys()).map(colorIndex => (
+              <button
+                key={colorIndex}
+                className={activeTab === `color-${colorIndex}` ? 'tab active' : 'tab'}
+                onClick={() => setActiveTab(`color-${colorIndex}` as ViewTab)}
+                style={{ borderBottomColor: palette[colorIndex] }}
+              >
+                {getColorName(colorIndex)} Packing
+              </button>
+            ))}
+          </div>
+
+          <div className="preview-content">
+            {activeTab === 'full' ? (
+              <div className="svg-container" dangerouslySetInnerHTML={{ __html: svg }} />
+            ) : (
+              (() => {
+                const colorIndex = parseInt(activeTab.split('-')[1]);
+                const packed = packedLayouts.get(colorIndex);
+                if (!packed) return null;
+
+                const packedSvg = generatePackedSVG(packed, getColorName(colorIndex), {
+                  units: 'mm'
+                });
+
+                return <div className="svg-container" dangerouslySetInnerHTML={{ __html: packedSvg }} />;
+              })()
+            )}
+          </div>
         </main>
       </div>
     </div>
