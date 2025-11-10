@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { Save, FolderOpen, Moon, Sun } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 import { TessellationConfig, TessellationResult } from './lib/types';
 import { generateTessellation, applySeamAllowance, groupByColor } from './lib/tessellation';
 import { generateFullSVG, downloadSVG } from './lib/svg';
@@ -262,6 +264,9 @@ function App() {
         newMap.set(colorIndex, packed);
         return newMap;
       });
+
+      // Show success toast
+      toast.success(`Packing complete! Efficiency: ${packed.efficiency.toFixed(1)}%`);
     } catch (error) {
       console.error('[handlePackColor] Packing error:', error);
       // Clear progress on error
@@ -270,6 +275,9 @@ function App() {
         newMap.delete(colorIndex);
         return newMap;
       });
+
+      // Show error toast
+      toast.error(`Packing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -286,6 +294,11 @@ function App() {
         }
         return newMap;
       });
+
+      // Show info toast
+      toast('Packing stopped', {
+        icon: '⏸️',
+      });
     }
   };
 
@@ -293,9 +306,10 @@ function App() {
     try {
       const pattern = savePattern(baseTessellation, palette);
       downloadPattern(pattern);
+      toast.success('Pattern saved successfully');
     } catch (error) {
       console.error('Failed to save pattern:', error);
-      alert('Failed to save pattern. Please try again.');
+      toast.error('Failed to save pattern. Please try again.');
     }
   };
 
@@ -319,10 +333,10 @@ function App() {
         bounds: pattern.bounds,
       });
 
-      alert('Pattern loaded successfully!');
+      toast.success('Pattern loaded successfully');
     } catch (error) {
       console.error('Failed to load pattern:', error);
-      alert(`Failed to load pattern: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to load: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
     // Reset the file input
@@ -331,6 +345,35 @@ function App() {
 
   return (
     <div className="app">
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: isDarkMode ? '#1a1f2e' : '#ffffff',
+            color: isDarkMode ? '#e2e8f0' : '#1a202c',
+            border: isDarkMode ? '1px solid #2d3748' : '1px solid #e2e8f0',
+            borderRadius: '8px',
+            boxShadow: isDarkMode
+              ? '0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3)'
+              : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+          },
+          success: {
+            iconTheme: {
+              primary: '#27AE60',
+              secondary: isDarkMode ? '#1a1f2e' : '#ffffff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#E74C3C',
+              secondary: isDarkMode ? '#1a1f2e' : '#ffffff',
+            },
+          },
+        }}
+      />
       <header>
         <h1>Quilted Tessellation Generator</h1>
         <div className="header-buttons">
@@ -340,10 +383,10 @@ function App() {
             aria-label="Save pattern"
             title="Save pattern"
           >
-            💾
+            <Save size={18} />
           </button>
           <label className="header-icon-button" title="Load pattern">
-            📁
+            <FolderOpen size={18} />
             <input
               type="file"
               accept=".json"
@@ -357,7 +400,7 @@ function App() {
             aria-label="Toggle dark mode"
             title={isDarkMode ? 'Light mode' : 'Dark mode'}
           >
-            {isDarkMode ? '☀️' : '🌙'}
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
       </header>
