@@ -86,7 +86,8 @@ export function generateFullSVG(
 
       // Calculate spacing offset based on piece position
       // Add extra horizontal spacing for split pieces (sub-index)
-      const spacingX = basePiece.col * spacing + subIndex * spacing * 0.5;
+      console.log({ subIndex });
+      const spacingX = basePiece.col * spacing + subIndex * spacing;
       const spacingY = basePiece.row * spacing;
 
       // Draw original polygon (sewing line) as dashed with spacing

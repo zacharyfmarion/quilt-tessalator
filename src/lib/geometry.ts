@@ -95,8 +95,6 @@ export function offsetPolygon(polygon: Polygon, offset: number): Polygon {
   const n = polygon.length;
   const result: Point[] = [];
 
-  console.log('offsetPolygon input:', JSON.stringify(polygon));
-
   // Determine if polygon is clockwise or counterclockwise
   // This affects which direction is "outward"
   let area = 0;
@@ -195,7 +193,6 @@ export function offsetPolygon(polygon: Polygon, offset: number): Polygon {
     }
   }
 
-  console.log('offsetPolygon output:', JSON.stringify(result));
   return result;
 }
 

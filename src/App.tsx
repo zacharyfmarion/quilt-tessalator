@@ -45,8 +45,8 @@ const generateEqualProbabilities = (count: number): number[] => {
 const DEFAULT_COLORS = 3;
 
 const DEFAULT_CONFIG: TessellationConfig = {
-  rows: 8,
-  cols: 10,
+  rows: 1,
+  cols: 3,
   squareSize: 50, // mm
   colors: DEFAULT_COLORS,
   splitProbability: 0.4,
