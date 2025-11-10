@@ -9,6 +9,8 @@ interface PackingSidebarProps {
   updateConfig: (partial: Partial<TessellationConfig>) => void;
   packingSpacing: number;
   setPackingSpacing: (value: number) => void;
+  maxPackingIterations: number;
+  setMaxPackingIterations: (value: number) => void;
   sheetWidth: number;
   setSheetWidth: (value: number) => void;
   sheetHeight: number;
@@ -29,6 +31,8 @@ export function PackingSidebar({
   updateConfig,
   packingSpacing,
   setPackingSpacing,
+  maxPackingIterations,
+  setMaxPackingIterations,
   sheetWidth,
   setSheetWidth,
   sheetHeight,
@@ -108,6 +112,19 @@ export function PackingSidebar({
             />
             <small>Space between pieces when packing for laser cutting</small>
           </label>
+
+          <label>
+            Max Packing Iterations: {maxPackingIterations}
+            <input
+              type="range"
+              min="1"
+              max="100"
+              step="1"
+              value={maxPackingIterations}
+              onChange={(e) => setMaxPackingIterations(parseInt(e.target.value))}
+            />
+            <small>More iterations = better packing but slower</small>
+          </label>
         </CollapsibleSection>
 
         <CollapsibleSection
@@ -118,7 +135,7 @@ export function PackingSidebar({
           {packingProgress && packingProgress.isRunning && (
             <>
               <p><strong>Status:</strong> Running...</p>
-              <p><strong>Iteration:</strong> {packingProgress.iteration} / 10</p>
+              <p><strong>Iteration:</strong> {packingProgress.iteration} / {maxPackingIterations}</p>
               <p><strong>Current Efficiency:</strong> {packingProgress.utilization.toFixed(1)}%</p>
               <button
                 onClick={onStopPacking}

@@ -72,7 +72,13 @@ header h1 {
   letter-spacing: -0.025em;
 }
 
-.dark-mode-toggle {
+.header-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.header-icon-button {
   width: auto;
   padding: 0.5rem 1rem;
   background: rgba(255, 255, 255, 0.1);
@@ -88,19 +94,20 @@ header h1 {
   align-items: center;
   justify-content: center;
   min-width: 3rem;
+  color: white;
 }
 
-.dark-mode-toggle:hover {
+.header-icon-button:hover {
   background: rgba(255, 255, 255, 0.2);
   transform: translateY(0) scale(1.05);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.dark-mode-toggle:active {
+.header-icon-button:active {
   transform: scale(0.95);
 }
 
-.dark-mode-toggle::before {
+.header-icon-button::before {
   display: none;
 }
 

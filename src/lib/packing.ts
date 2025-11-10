@@ -29,6 +29,7 @@ export interface PackingOptions {
   sheetHeight: number;
   seamAllowance: number;
   spacing: number;
+  maxIterations?: number; // Number of iterations to run (default 10)
   onProgress?: (progress: PackingProgress) => void;
   onNesterCreated?: (nester: AnyNest) => void;
 }
@@ -111,7 +112,7 @@ export async function packPolygons(
   return new Promise<PackedResult>((resolve, reject) => {
     let bestResult: PackedResult | null = null;
     let iterationCount = 0;
-    const maxIterations = 10; // Let algorithm run for 10 generations
+    const maxIterations = options.maxIterations || 10; // Let algorithm run for N generations
 
     // Use setTimeout to prevent blocking the UI thread
     console.log('[packPolygons] Scheduling nester.start()...');

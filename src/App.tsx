@@ -1,8 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { TessellationConfig } from './lib/types';
+import { TessellationConfig, TessellationResult } from './lib/types';
 import { generateTessellation, applySeamAllowance, groupByColor } from './lib/tessellation';
 import { generateFullSVG, downloadSVG } from './lib/svg';
 import { packPolygons, generatePackedSVG, PackedResult, PackingProgress } from './lib/packing';
+import { savePattern, downloadPattern, uploadPattern } from './lib/pattern-io';
 import { AnyNest } from 'any-nest';
 import { QuiltSidebar } from './components/QuiltSidebar';
 import { PackingSidebar } from './components/PackingSidebar';
@@ -69,6 +70,7 @@ function App() {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [palette, setPalette] = useState<string[]>(() => generateInitialPalette(DEFAULT_COLORS));
   const [packingSpacing, setPackingSpacing] = useState(3); // mm
+  const [maxPackingIterations, setMaxPackingIterations] = useState(10);
   const [activeTab, setActiveTab] = useState<ViewTab>('full');
   const [sheetWidth, setSheetWidth] = useState(600); // mm
   const [sheetHeight, setSheetHeight] = useState(400); // mm
@@ -76,6 +78,7 @@ function App() {
     const stored = localStorage.getItem('darkMode');
     return stored ? JSON.parse(stored) : false;
   });
+  const [loadedTessellation, setLoadedTessellation] = useState<TessellationResult | null>(null);
 
   // Apply dark mode class and persist preference
   useEffect(() => {
@@ -89,8 +92,12 @@ function App() {
 
   // Generate base tessellation (without seam allowance)
   const baseTessellation = useMemo(() => {
+    // If we have a loaded tessellation, use it instead of generating
+    if (loadedTessellation) {
+      return loadedTessellation;
+    }
     return generateTessellation(config);
-  }, [config]);
+  }, [config, loadedTessellation]);
 
   // Apply seam allowance if needed (doesn't regenerate the pattern)
   const tessellation = useMemo(() => {
@@ -198,6 +205,8 @@ function App() {
   };
 
   const handleRegenerateTessellation = () => {
+    // Clear any loaded tessellation so we regenerate from config
+    setLoadedTessellation(null);
     // Force regeneration by creating new config object
     setConfig({ ...config });
   };
@@ -232,6 +241,7 @@ function App() {
         sheetHeight,
         seamAllowance: config.seamAllowance,
         spacing: packingSpacing,
+        maxIterations: maxPackingIterations,
         onProgress: (progress) => {
           console.log('[handlePackColor] Progress update:', progress);
           setPackingProgress(prev => {
@@ -279,17 +289,77 @@ function App() {
     }
   };
 
+  const handleSavePattern = () => {
+    try {
+      const pattern = savePattern(baseTessellation, palette);
+      downloadPattern(pattern);
+    } catch (error) {
+      console.error('Failed to save pattern:', error);
+      alert('Failed to save pattern. Please try again.');
+    }
+  };
+
+  const handleLoadPattern = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const pattern = await uploadPattern(file);
+
+      // Restore the config
+      setConfig(pattern.config);
+
+      // Restore the palette
+      setPalette(pattern.palette);
+
+      // Restore the exact tessellation
+      setLoadedTessellation({
+        pieces: pattern.pieces,
+        config: pattern.config,
+        bounds: pattern.bounds,
+      });
+
+      alert('Pattern loaded successfully!');
+    } catch (error) {
+      console.error('Failed to load pattern:', error);
+      alert(`Failed to load pattern: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // Reset the file input
+    event.target.value = '';
+  };
+
   return (
     <div className="app">
       <header>
         <h1>Quilted Tessellation Generator</h1>
-        <button
-          className="dark-mode-toggle"
-          onClick={toggleDarkMode}
-          aria-label="Toggle dark mode"
-        >
-          {isDarkMode ? '☀️' : '🌙'}
-        </button>
+        <div className="header-buttons">
+          <button
+            className="header-icon-button"
+            onClick={handleSavePattern}
+            aria-label="Save pattern"
+            title="Save pattern"
+          >
+            💾
+          </button>
+          <label className="header-icon-button" title="Load pattern">
+            📁
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleLoadPattern}
+              style={{ display: 'none' }}
+            />
+          </label>
+          <button
+            className="header-icon-button"
+            onClick={toggleDarkMode}
+            aria-label="Toggle dark mode"
+            title={isDarkMode ? 'Light mode' : 'Dark mode'}
+          >
+            {isDarkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
       </header>
 
       <div className="container">
@@ -317,6 +387,8 @@ function App() {
               updateConfig={updateConfig}
               packingSpacing={packingSpacing}
               setPackingSpacing={setPackingSpacing}
+              maxPackingIterations={maxPackingIterations}
+              setMaxPackingIterations={setMaxPackingIterations}
               sheetWidth={sheetWidth}
               setSheetWidth={setSheetWidth}
               sheetHeight={sheetHeight}
