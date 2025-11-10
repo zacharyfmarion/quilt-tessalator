@@ -68,17 +68,36 @@ export function generateFullSVG(
 
   // If showing seam allowance and we have the base tessellation, draw both
   if (showSeamAllowance && baseTessellation) {
-    // First draw the original polygons (sewing lines) as dashed
-    for (const piece of baseTessellation.pieces) {
-      const pathData = polygonToPath(piece.polygon);
-      svg += `    <path id="${piece.id}-original" class="original-outline" d="${pathData}"/>\n`;
-    }
+    // Add spacing between pieces for clarity
+    const spacing = result.config.seamAllowance * 2; // 2x seam allowance spacing
 
-    // Then draw the offset polygons (cutting lines) with fills
-    for (const piece of result.pieces) {
-      const color = colorPalette[piece.colorIndex] || '#cccccc';
-      const pathData = polygonToPath(piece.polygon);
-      svg += `    <path id="${piece.id}" class="seam-piece" fill="${color}" d="${pathData}"/>\n`;
+    // Track how many pieces we've seen at each row,col to handle splits
+    const positionCounts = new Map<string, number>();
+
+    for (let i = 0; i < baseTessellation.pieces.length; i++) {
+      const basePiece = baseTessellation.pieces[i];
+      const offsetPiece = result.pieces[i];
+      const color = colorPalette[offsetPiece.colorIndex] || '#cccccc';
+
+      // Create a key for this row/col position
+      const posKey = `${basePiece.row},${basePiece.col}`;
+      const subIndex = positionCounts.get(posKey) || 0;
+      positionCounts.set(posKey, subIndex + 1);
+
+      // Calculate spacing offset based on piece position
+      // Add extra horizontal spacing for split pieces (sub-index)
+      const spacingX = basePiece.col * spacing + subIndex * spacing * 0.5;
+      const spacingY = basePiece.row * spacing;
+
+      // Draw original polygon (sewing line) as dashed with spacing
+      const originalPathData = polygonToPath(basePiece.polygon);
+      svg += `    <g transform="translate(${spacingX}, ${spacingY})">\n`;
+      svg += `      <path id="${basePiece.id}-original" class="original-outline" d="${originalPathData}"/>\n`;
+
+      // Draw offset polygon (cutting line) with fills and spacing
+      const offsetPathData = polygonToPath(offsetPiece.polygon);
+      svg += `      <path id="${offsetPiece.id}" class="seam-piece" fill="${color}" d="${offsetPathData}"/>\n`;
+      svg += `    </g>\n`;
     }
   } else {
     // Just draw normal pieces
