@@ -26,6 +26,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
   for (let row = 0; row < rows; row++) {
     let cumulativeX = 0;
     const height = heights[row];
+    let pieceCol = 0; // Track piece column index (increments for each piece, not grid cell)
 
     for (let col = 0; col < cols; col++) {
       // Calculate position with brick offset
@@ -46,7 +47,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
           colorIndex: -1, // Assign later
           isTriangle: splitAngleVariation === 0,
           row,
-          col,
+          col: pieceCol++, // Assign sequential col for first piece
           position: 'top',
         });
 
@@ -56,7 +57,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
           colorIndex: -1, // Assign later
           isTriangle: splitAngleVariation === 0,
           row,
-          col,
+          col: pieceCol++, // Assign sequential col for second piece
           position: 'bottom',
         });
       } else {
@@ -66,7 +67,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
           colorIndex: -1, // Assign later
           isTriangle: false,
           row,
-          col,
+          col: pieceCol++, // Assign sequential col
           position: 'full',
         });
       }

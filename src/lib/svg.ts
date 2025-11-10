@@ -71,23 +71,14 @@ export function generateFullSVG(
     // Add spacing between pieces for clarity
     const spacing = result.config.seamAllowance * 2; // 2x seam allowance spacing
 
-    // Track how many pieces we've seen at each row,col to handle splits
-    const positionCounts = new Map<string, number>();
-
     for (let i = 0; i < baseTessellation.pieces.length; i++) {
       const basePiece = baseTessellation.pieces[i];
       const offsetPiece = result.pieces[i];
       const color = colorPalette[offsetPiece.colorIndex] || '#cccccc';
 
-      // Create a key for this row/col position
-      const posKey = `${basePiece.row},${basePiece.col}`;
-      const subIndex = positionCounts.get(posKey) || 0;
-      positionCounts.set(posKey, subIndex + 1);
-
       // Calculate spacing offset based on piece position
-      // Add extra horizontal spacing for split pieces (sub-index)
-      console.log({ subIndex });
-      const spacingX = basePiece.col * spacing + subIndex * spacing;
+      // Each piece now has its own col index (sequential for splits)
+      const spacingX = basePiece.col * spacing;
       const spacingY = basePiece.row * spacing;
 
       // Draw original polygon (sewing line) as dashed with spacing
