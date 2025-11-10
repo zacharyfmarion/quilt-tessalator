@@ -40,11 +40,16 @@ export function generateFullSVG(
   colorPalette: string[],
   options: {
     showSeamAllowance?: boolean;
+    baseTessellation?: TessellationResult; // Original without seam allowance
     padding?: number;
     units?: string;
   } = {}
 ): string {
-  const { showSeamAllowance = false, padding = 10, units = 'mm' } = options;
+  const { showSeamAllowance = false, baseTessellation, padding = 10, units = 'mm' } = options;
+
+  // When showing seam allowance, use OFFSET tessellation bounds (result) for the viewBox
+  // This shows the full cutting area including seam allowance
+  // Original shapes will appear smaller inside because they don't have seam allowance
   const { bounds } = result;
 
   const width = bounds.width + padding * 2;
@@ -52,13 +57,35 @@ export function generateFullSVG(
 
   let svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}${units}" height="${height}${units}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <style>
+      .original-outline { fill: none; stroke: #666; stroke-width: 0.8; stroke-dasharray: 3,3; }
+      .seam-piece { stroke: black; stroke-width: 0.5; fill-opacity: 0.3; }
+    </style>
+  </defs>
   <g transform="translate(${padding}, ${padding})">
 `;
 
-  // Draw all pieces
-  for (const piece of result.pieces) {
-    const color = colorPalette[piece.colorIndex] || '#cccccc';
-    svg += '    ' + pieceToSVG(piece, color, true) + '\n';
+  // If showing seam allowance and we have the base tessellation, draw both
+  if (showSeamAllowance && baseTessellation) {
+    // First draw the original polygons (sewing lines) as dashed
+    for (const piece of baseTessellation.pieces) {
+      const pathData = polygonToPath(piece.polygon);
+      svg += `    <path id="${piece.id}-original" class="original-outline" d="${pathData}"/>\n`;
+    }
+
+    // Then draw the offset polygons (cutting lines) with fills
+    for (const piece of result.pieces) {
+      const color = colorPalette[piece.colorIndex] || '#cccccc';
+      const pathData = polygonToPath(piece.polygon);
+      svg += `    <path id="${piece.id}" class="seam-piece" fill="${color}" d="${pathData}"/>\n`;
+    }
+  } else {
+    // Just draw normal pieces
+    for (const piece of result.pieces) {
+      const color = colorPalette[piece.colorIndex] || '#cccccc';
+      svg += '    ' + pieceToSVG(piece, color, true) + '\n';
+    }
   }
 
   svg += `  </g>

@@ -1,4 +1,4 @@
-import { Point, Polygon } from './types';
+import { Polygon, Point } from './types';
 
 /**
  * Create a rectangle polygon
@@ -32,7 +32,6 @@ export function splitRectangle(
 
   // Calculate rectangle dimensions
   const width = tr.x - tl.x;
-  const height = bl.y - tl.y;
 
   // If no variation, do a simple diagonal split
   if (angleVariation === 0) {
@@ -80,21 +79,33 @@ export function splitRectangle(
  */
 export function splitSquareIntoTriangles(
   square: Polygon,
-  diagonal: 'tl-br' | 'tr-bl' = 'tl-br'
+  _diagonal: 'tl-br' | 'tr-bl' = 'tl-br'
 ): [Polygon, Polygon] {
   return splitRectangle(square, 0);
 }
 
 /**
- * Simple polygon offset for quilting seam allowances
- * Moves each edge outward perpendicular to itself by the offset amount
- * Then finds the intersection points of adjacent offset edges
+ * Simple polygon offset for seam allowances
+ * Moves each edge perpendicular outward by offset distance
+ * Finds intersection points of adjacent offset edges
  */
 export function offsetPolygon(polygon: Polygon, offset: number): Polygon {
   if (offset === 0) return polygon;
 
   const n = polygon.length;
   const result: Point[] = [];
+
+  console.log('offsetPolygon input:', JSON.stringify(polygon));
+
+  // Determine if polygon is clockwise or counterclockwise
+  // This affects which direction is "outward"
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += polygon[i].x * polygon[j].y;
+    area -= polygon[j].x * polygon[i].y;
+  }
+  const isClockwise = area < 0;
 
   // For each vertex, calculate where the two adjacent offset edges intersect
   for (let i = 0; i < n; i++) {
@@ -109,14 +120,28 @@ export function offsetPolygon(polygon: Polygon, offset: number): Polygon {
     // Normalize the edges
     const len1 = Math.sqrt(edge1.x * edge1.x + edge1.y * edge1.y);
     const len2 = Math.sqrt(edge2.x * edge2.x + edge2.y * edge2.y);
+
+    if (len1 < 0.0001 || len2 < 0.0001) {
+      // Degenerate edge, skip
+      continue;
+    }
+
     edge1.x /= len1;
     edge1.y /= len1;
     edge2.x /= len2;
     edge2.y /= len2;
 
-    // Get perpendiculars pointing outward (rotate 90° counterclockwise for outward normal)
-    const perp1 = { x: -edge1.y, y: edge1.x };
-    const perp2 = { x: -edge2.y, y: edge2.x };
+    // Get perpendiculars pointing OUTWARD (away from polygon interior)
+    // For clockwise polygons: outward is counterclockwise perpendicular (-y, x)
+    // For counterclockwise polygons: outward is clockwise perpendicular (y, -x)
+    let perp1, perp2;
+    if (isClockwise) {
+      perp1 = { x: -edge1.y, y: edge1.x };
+      perp2 = { x: -edge2.y, y: edge2.x };
+    } else {
+      perp1 = { x: edge1.y, y: -edge1.x };
+      perp2 = { x: edge2.y, y: -edge2.x };
+    }
 
     // Move the edges outward by offset amount
     // Edge 1 goes from (prev + perp1*offset) to (curr + perp1*offset)
@@ -140,10 +165,27 @@ export function offsetPolygon(polygon: Polygon, offset: number): Polygon {
     if (Math.abs(denom) > 0.0001) {
       // Lines intersect
       const t = ((p3.x - p1.x) * d2.y - (p3.y - p1.y) * d2.x) / denom;
-      result.push({
+
+      // Limit how far the intersection can be from the original vertex
+      // This prevents extreme spikes at acute angles
+      const maxDistance = offset * 10; // Allow miter up to 10x offset
+      const intersection = {
         x: p1.x + t * d1.x,
         y: p1.y + t * d1.y
-      });
+      };
+
+      const distFromCurr = Math.sqrt(
+        (intersection.x - curr.x) ** 2 +
+        (intersection.y - curr.y) ** 2
+      );
+
+      if (distFromCurr <= maxDistance) {
+        result.push(intersection);
+      } else {
+        // Clip the miter - use a bevel instead
+        result.push(p2);
+        result.push(p3);
+      }
     } else {
       // Lines are parallel (shouldn't happen often), use average
       result.push({
@@ -153,6 +195,7 @@ export function offsetPolygon(polygon: Polygon, offset: number): Polygon {
     }
   }
 
+  console.log('offsetPolygon output:', JSON.stringify(result));
   return result;
 }
 

@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { TessellationConfig } from './lib/types';
 import { generateTessellation, applySeamAllowance, groupByColor } from './lib/tessellation';
-import { generateFullSVG, generateColorSVG, downloadSVG } from './lib/svg';
-import { packPolygons, generatePackedSVG, PackedResult } from './lib/packing';
+import { generateFullSVG, downloadSVG } from './lib/svg';
+import { packPolygons, generatePackedSVG, PackedResult, PackingProgress } from './lib/packing';
+import { AnyNest } from 'any-nest';
 import { QuiltSidebar } from './components/QuiltSidebar';
 import { PackingSidebar } from './components/PackingSidebar';
 import './App.css';
@@ -85,9 +86,10 @@ function App() {
   const svg = useMemo(() => {
     return generateFullSVG(tessellation, palette, {
       showSeamAllowance,
+      baseTessellation: showSeamAllowance ? baseTessellation : undefined,
       units: 'mm',
     });
-  }, [tessellation, palette, showSeamAllowance]);
+  }, [tessellation, palette, showSeamAllowance, baseTessellation]);
 
   const colorGroups = useMemo(() => {
     return groupByColor(tessellation);
@@ -95,35 +97,8 @@ function App() {
 
   // Generate packed layouts for each color
   const [packedLayouts, setPackedLayouts] = useState<Map<number, PackedResult>>(new Map());
-  const [isPackingLoading, setIsPackingLoading] = useState(false);
-
-  // Regenerate packing when dependencies change
-  useMemo(() => {
-    setIsPackingLoading(true);
-    const layouts = new Map<number, PackedResult>();
-
-    const packAllColors = async () => {
-      const promises = Array.from(colorGroups.entries()).map(async ([colorIndex, pieces]) => {
-        const packed = await packPolygons(pieces, {
-          sheetWidth,
-          sheetHeight,
-          seamAllowance: config.seamAllowance,
-          spacing: packingSpacing
-        });
-        return [colorIndex, packed] as const;
-      });
-
-      const results = await Promise.all(promises);
-      results.forEach(([colorIndex, packed]) => {
-        layouts.set(colorIndex, packed);
-      });
-
-      setPackedLayouts(layouts);
-      setIsPackingLoading(false);
-    };
-
-    packAllColors();
-  }, [colorGroups, config.seamAllowance, packingSpacing, sheetWidth, sheetHeight]);
+  const [packingProgress, setPackingProgress] = useState<Map<number, PackingProgress>>(new Map());
+  const nestersRef = useRef<Map<number, AnyNest>>(new Map());
 
   const updateConfig = (partial: Partial<TessellationConfig>) => {
     setConfig(prev => {
@@ -192,14 +167,15 @@ function App() {
     }
   };
 
-  const handleDownloadByColor = (colorIndex: number) => {
-    const pieces = colorGroups.get(colorIndex);
-    if (!pieces) return;
+  // Removed - not currently used
+  // const handleDownloadByColor = (_colorIndex: number) => {
+  //   const pieces = colorGroups.get(_colorIndex);
+  //   if (!pieces) return;
 
-    const colorName = getColorName(colorIndex);
-    const colorSvg = generateColorSVG(pieces, colorName, { units: 'mm' });
-    downloadSVG(colorSvg, `tessellation-${colorName.toLowerCase().replace(' ', '-')}.svg`);
-  };
+  //   const colorName = getColorName(_colorIndex);
+  //   const colorSvg = generateColorSVG(pieces, colorName, { units: 'mm' });
+  //   downloadSVG(colorSvg, `tessellation-${colorName.toLowerCase().replace(' ', '-')}.svg`);
+  // };
 
   const updatePaletteColor = (colorIndex: number, newColor: string) => {
     const newPalette = [...palette];
@@ -217,6 +193,76 @@ function App() {
       ...prev,
       [sectionName]: !prev[sectionName]
     }));
+  };
+
+  const handlePackColor = async (colorIndex: number) => {
+    console.log('[handlePackColor] Starting pack for color:', colorIndex);
+    const pieces = colorGroups.get(colorIndex);
+    console.log('[handlePackColor] Pieces found:', pieces?.length);
+    if (!pieces) {
+      console.log('[handlePackColor] No pieces found, returning');
+      return;
+    }
+
+    console.log('[handlePackColor] Calling packPolygons with:', {
+      sheetWidth,
+      sheetHeight,
+      seamAllowance: config.seamAllowance,
+      spacing: packingSpacing,
+      pieceCount: pieces.length
+    });
+
+    try {
+      const packed = await packPolygons(pieces, {
+        sheetWidth,
+        sheetHeight,
+        seamAllowance: config.seamAllowance,
+        spacing: packingSpacing,
+        onProgress: (progress) => {
+          console.log('[handlePackColor] Progress update:', progress);
+          setPackingProgress(prev => {
+            const newMap = new Map(prev);
+            newMap.set(colorIndex, progress);
+            return newMap;
+          });
+        },
+        onNesterCreated: (nester) => {
+          console.log('[handlePackColor] Nester created');
+          nestersRef.current.set(colorIndex, nester);
+        }
+      });
+
+      console.log('[handlePackColor] Packing complete, result:', packed);
+      setPackedLayouts(prev => {
+        const newMap = new Map(prev);
+        newMap.set(colorIndex, packed);
+        return newMap;
+      });
+    } catch (error) {
+      console.error('[handlePackColor] Packing error:', error);
+      // Clear progress on error
+      setPackingProgress(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(colorIndex);
+        return newMap;
+      });
+    }
+  };
+
+  const handleStopPacking = (colorIndex: number) => {
+    const nester = nestersRef.current.get(colorIndex);
+    if (nester) {
+      nester.stop();
+      // Update progress to show stopped state
+      setPackingProgress(prev => {
+        const newMap = new Map(prev);
+        const current = newMap.get(colorIndex);
+        if (current) {
+          newMap.set(colorIndex, { ...current, isRunning: false });
+        }
+        return newMap;
+      });
+    }
   };
 
   return (
@@ -260,6 +306,9 @@ function App() {
               collapsedSections={collapsedSections}
               toggleSection={toggleSection}
               onDownload={handleDownloadCurrent}
+              packingProgress={packingProgress.get(parseInt(activeTab.split('-')[1]))}
+              onPackColor={() => handlePackColor(parseInt(activeTab.split('-')[1]))}
+              onStopPacking={() => handleStopPacking(parseInt(activeTab.split('-')[1]))}
             />
           )}
         </aside>

@@ -1,5 +1,5 @@
 import { TessellationConfig } from '../lib/types';
-import { PackedResult } from '../lib/packing';
+import { PackedResult, PackingProgress } from '../lib/packing';
 import { CollapsibleSection } from './CollapsibleSection';
 
 const getColorName = (index: number) => `Color ${index + 1}`;
@@ -19,6 +19,9 @@ interface PackingSidebarProps {
   collapsedSections: Record<string, boolean>;
   toggleSection: (name: string) => void;
   onDownload: () => void;
+  packingProgress?: PackingProgress;
+  onPackColor: () => void;
+  onStopPacking: () => void;
 }
 
 export function PackingSidebar({
@@ -32,10 +35,13 @@ export function PackingSidebar({
   setSheetHeight,
   packedLayout,
   colorIndex,
-  palette,
+  palette: _palette,
   collapsedSections,
   toggleSection,
-  onDownload
+  onDownload,
+  packingProgress,
+  onPackColor: _onPackColor,
+  onStopPacking
 }: PackingSidebarProps) {
   return (
     <>
@@ -109,23 +115,57 @@ export function PackingSidebar({
           isCollapsed={!!collapsedSections['packing-stats']}
           onToggle={() => toggleSection('packing-stats')}
         >
-          {packedLayout ? (
+          {packingProgress && packingProgress.isRunning && (
+            <>
+              <p><strong>Status:</strong> Running...</p>
+              <p><strong>Iteration:</strong> {packingProgress.iteration} / 10</p>
+              <p><strong>Current Efficiency:</strong> {packingProgress.utilization.toFixed(1)}%</p>
+              <button
+                onClick={onStopPacking}
+                style={{
+                  background: 'linear-gradient(135deg, #E74C3C 0%, #C0392B 100%)',
+                  marginTop: '1rem'
+                }}
+              >
+                ⏹ Stop Packing
+              </button>
+            </>
+          )}
+          {packedLayout && (!packingProgress || !packingProgress.isRunning) && (
             <>
               <p><strong>Color:</strong> {getColorName(colorIndex)}</p>
               <p><strong>Pieces:</strong> {packedLayout.pieces.length}</p>
               <p><strong>Sheet Size:</strong> {packedLayout.sheetWidth.toFixed(1)} × {packedLayout.sheetHeight.toFixed(1)} mm</p>
               <p><strong>Efficiency:</strong> {packedLayout.efficiency.toFixed(1)}%</p>
             </>
-          ) : (
+          )}
+          {!packedLayout && (!packingProgress || !packingProgress.isRunning) && (
             <p>No packing data available</p>
           )}
         </CollapsibleSection>
       </div>
 
       <div className="controls-footer">
-        <button onClick={onDownload} className="export-btn">
-          📥 Download {getColorName(colorIndex)} Packing
-        </button>
+        {!packingProgress?.isRunning && !packedLayout && (
+          <button
+            onClick={() => {
+              console.log('[PackingSidebar] Pack button clicked for color:', colorIndex);
+              _onPackColor();
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #3498DB 0%, #2980B9 100%)',
+              marginBottom: '0.75rem'
+            }}
+          >
+            📦 Pack {getColorName(colorIndex)}
+          </button>
+        )}
+
+        {packedLayout && (
+          <button onClick={onDownload} className="export-btn">
+            📥 Download {getColorName(colorIndex)} Packing
+          </button>
+        )}
       </div>
     </>
   );
