@@ -1,3 +1,4 @@
+import { Shuffle, Download } from 'lucide-react';
 import { TessellationConfig, TessellationResult } from '../lib/types';
 import { CollapsibleSection } from './CollapsibleSection';
 
@@ -256,11 +257,13 @@ export function QuiltSidebar({
 
       <div className="controls-footer">
         <button onClick={onRegenerate} className="regenerate-btn">
-          🎲 Regenerate Pattern
+          <Shuffle size={18} />
+          Regenerate Pattern
         </button>
 
         <button onClick={onDownload} className="export-btn">
-          📥 Download Full Pattern
+          <Download size={18} />
+          Download Full Pattern
         </button>
       </div>
     </>

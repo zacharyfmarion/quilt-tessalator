@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A TypeScript/React web application for generating brick-pattern tessellations with multiple fabric colors, designed for laser-cutting quilted denim garments. Users design patterns interactively and export SVG files optimized for laser cutting.
+A TypeScript/React web application for generating brick-pattern tessellations with multiple fabric colors, designed for laser-cutting quilted garments. Users design patterns interactively, pack pieces efficiently onto fabric sheets, and export SVG files optimized for laser cutting.
+
+**Live demo:** https://zacharyfmarion.github.io/quilt-tessalator/
 
 ## Commands
 
@@ -59,15 +61,14 @@ The tessellation generation follows a three-stage pipeline in `src/lib/tessellat
 
 ### Packing System (`src/lib/packing.ts`)
 
-Currently implements simple grid-based packing as a placeholder. The `any-nest` library is installed but not yet integrated.
+Implements automated nesting using the `any-nest` library for efficient fabric usage.
 
-**Current Approach:**
-- Grid-based layout with configurable spacing
-- Applies seam allowance before packing
-- Calculates efficiency percentage
-- Generates packed SVGs with sheet boundaries
-
-**TODO**: Replace with `any-nest` for optimized nesting.
+**Features:**
+- Integrates with `any-nest` for polygon nesting optimization
+- Configurable spacing, sheet dimensions, and iteration count
+- Progress callbacks for real-time UI updates
+- Calculates and displays packing efficiency
+- Generates packed SVGs with sheet boundaries and piece placement
 
 ### Data Types (`src/lib/types.ts`)
 
@@ -81,14 +82,32 @@ Currently implements simple grid-based packing as a placeholder. The `any-nest` 
 - `sameColorProbability`: Allows/prevents adjacent same-colored pieces
 - `colorProbabilities`: Weighted distribution for color assignment
 
-### UI Component (`src/App.tsx`)
+### UI Components
 
-Single-page React app with three main sections:
+**Main App (`src/App.tsx`):**
+- Single-page React app with tabbed interface
+- **Full Pattern Tab**: Shows complete tessellation with all colors
+- **Color Packing Tabs**: Per-color views with packing optimization
+- Dark mode support with localStorage persistence
+- Save/load pattern configurations via JSON files
+
+**QuiltSidebar (`src/components/QuiltSidebar.tsx`):**
+Used in the Full Pattern tab with collapsible sections:
 1. **Grid Settings**: Rows, columns, size, brick offset, width/height variation
-2. **Colors & Patterns**: Fabric count, split probability, angle variation, color probabilities
-3. **Seam Allowance**: Configurable seam allowance with preview toggle
+2. **Colors & Patterns**: Color count, probabilities, split settings, same-color adjacency
+3. **Seam Allowance**: Configurable allowance with preview toggle
 
-Pattern regeneration creates new color assignments without changing geometry.
+**PackingSidebar (`src/components/PackingSidebar.tsx`):**
+Used in Color Packing tabs:
+1. **Packing Settings**: Sheet dimensions, spacing, max iterations
+2. **Actions**: Pack color button, stop packing, progress indicator
+3. **Metrics**: Efficiency display, piece count
+
+### Pattern I/O (`src/lib/pattern-io.ts`)
+
+- **Save patterns**: Export tessellation results and config as JSON
+- **Load patterns**: Import previously saved patterns
+- Browser-based file download/upload using JSON format
 
 ## Measurement Units
 
@@ -116,5 +135,7 @@ This ensures no backtracking and deterministic results for a given random seed.
 
 ### External Libraries
 
-- **clipper2-js**: Installed for robust polygon offsetting (not yet utilized)
-- **any-nest**: Installed for advanced packing/nesting (not yet integrated)
+- **any-nest**: 2D polygon nesting library for automated packing optimization
+- **clipper2-js**: Available for robust polygon offsetting (not currently utilized; basic offsetting in geometry.ts works for typical use cases)
+- **react-hot-toast**: Toast notifications for user feedback
+- **lucide-react**: Icon components for UI

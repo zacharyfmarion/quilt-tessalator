@@ -81,6 +81,13 @@ function App() {
     return stored ? JSON.parse(stored) : false;
   });
   const [loadedTessellation, setLoadedTessellation] = useState<TessellationResult | null>(null);
+  const [colorOverrides, setColorOverrides] = useState<Map<string, number>>(new Map());
+  const [colorPickerState, setColorPickerState] = useState<{
+    visible: boolean;
+    pieceId: string | null;
+    x: number;
+    y: number;
+  }>({ visible: false, pieceId: null, x: 0, y: 0 });
 
   // Apply dark mode class and persist preference
   useEffect(() => {
@@ -101,10 +108,26 @@ function App() {
     return generateTessellation(config);
   }, [config, loadedTessellation]);
 
+  // Apply color overrides to tessellation
+  const tessellationWithOverrides = useMemo(() => {
+    if (colorOverrides.size === 0) return baseTessellation;
+
+    return {
+      ...baseTessellation,
+      pieces: baseTessellation.pieces.map(piece => {
+        const override = colorOverrides.get(piece.id);
+        if (override !== undefined) {
+          return { ...piece, colorIndex: override };
+        }
+        return piece;
+      }),
+    };
+  }, [baseTessellation, colorOverrides]);
+
   // Apply seam allowance if needed (doesn't regenerate the pattern)
   const tessellation = useMemo(() => {
-    return showSeamAllowance ? applySeamAllowance(baseTessellation) : baseTessellation;
-  }, [baseTessellation, showSeamAllowance]);
+    return showSeamAllowance ? applySeamAllowance(tessellationWithOverrides) : tessellationWithOverrides;
+  }, [tessellationWithOverrides, showSeamAllowance]);
 
   const svg = useMemo(() => {
     return generateFullSVG(tessellation, palette, {
@@ -209,8 +232,44 @@ function App() {
   const handleRegenerateTessellation = () => {
     // Clear any loaded tessellation so we regenerate from config
     setLoadedTessellation(null);
+    // Clear color overrides
+    setColorOverrides(new Map());
     // Force regeneration by creating new config object
     setConfig({ ...config });
+  };
+
+  const handlePieceClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    // Only handle clicks on the full pattern view
+    if (activeTab !== 'full') return;
+
+    const target = event.target as SVGElement;
+    if (target.tagName === 'path' && target.id) {
+      const pieceId = target.id.replace('-original', ''); // Handle seam allowance view
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+
+      setColorPickerState({
+        visible: true,
+        pieceId,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    }
+  };
+
+  const handleColorChange = (colorIndex: number) => {
+    if (colorPickerState.pieceId) {
+      setColorOverrides(prev => {
+        const newMap = new Map(prev);
+        newMap.set(colorPickerState.pieceId!, colorIndex);
+        return newMap;
+      });
+      setColorPickerState({ visible: false, pieceId: null, x: 0, y: 0 });
+      toast.success('Color updated');
+    }
+  };
+
+  const handleCloseColorPicker = () => {
+    setColorPickerState({ visible: false, pieceId: null, x: 0, y: 0 });
   };
 
   const toggleSection = (sectionName: string) => {
@@ -325,6 +384,9 @@ function App() {
 
       // Restore the palette
       setPalette(pattern.palette);
+
+      // Clear color overrides
+      setColorOverrides(new Map());
 
       // Restore the exact tessellation
       setLoadedTessellation({
@@ -482,7 +544,37 @@ function App() {
 
           <div className="preview-content">
             {activeTab === 'full' ? (
-              <div className="svg-container" dangerouslySetInnerHTML={{ __html: svg }} />
+              <div className="svg-container" onClick={handlePieceClick} style={{ cursor: 'pointer', position: 'relative' }}>
+                <div dangerouslySetInnerHTML={{ __html: svg }} />
+                {colorPickerState.visible && (
+                  <>
+                    <div className="color-picker-overlay" onClick={handleCloseColorPicker} />
+                    <div
+                      className="color-picker-popover"
+                      style={{
+                        position: 'absolute',
+                        left: `${colorPickerState.x}px`,
+                        top: `${colorPickerState.y}px`,
+                      }}
+                    >
+                      <div className="color-picker-header">Select Color</div>
+                      <div className="color-picker-options">
+                        {Array.from({ length: config.colors }, (_, i) => i).map(colorIndex => (
+                          <button
+                            key={colorIndex}
+                            className="color-picker-option"
+                            onClick={() => handleColorChange(colorIndex)}
+                            style={{ backgroundColor: palette[colorIndex] }}
+                            title={getColorName(colorIndex)}
+                          >
+                            <span className="color-picker-label">{getColorName(colorIndex)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
               (() => {
                 const colorIndex = parseInt(activeTab.split('-')[1]);
