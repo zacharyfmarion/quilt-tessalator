@@ -16,6 +16,22 @@
   --radius-lg: 12px;
 }
 
+/* Dark mode colors */
+.dark-mode {
+  --primary: #5DA3F5;
+  --primary-dark: #4A90E2;
+  --dark: #0f1419;
+  --dark-light: #1a1f2e;
+  --light: #0f1419;
+  --light-gray: #1a1f2e;
+  --border: #2d3748;
+  --text-primary: #e2e8f0;
+  --text-secondary: #a0aec0;
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -44,6 +60,9 @@ header {
   padding: 0.75rem 2rem;
   box-shadow: var(--shadow-md);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 header h1 {
@@ -51,6 +70,38 @@ header h1 {
   font-weight: 700;
   margin: 0;
   letter-spacing: -0.025em;
+}
+
+.dark-mode-toggle {
+  width: auto;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin: 0;
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+}
+
+.dark-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(0) scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.dark-mode-toggle:active {
+  transform: scale(0.95);
+}
+
+.dark-mode-toggle::before {
+  display: none;
 }
 
 .container {
@@ -78,6 +129,10 @@ header h1 {
   flex-direction: column;
 }
 
+.dark-mode .controls {
+  background: var(--dark-light);
+}
+
 .controls-scrollable {
   flex: 1;
   overflow-y: auto;
@@ -89,6 +144,10 @@ header h1 {
   border-top: 1px solid var(--light-gray);
   background: white;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.dark-mode .controls-footer {
+  background: var(--dark-light);
 }
 
 .controls-footer button {
@@ -204,6 +263,12 @@ header h1 {
   transition: all 0.2s ease;
 }
 
+.dark-mode .controls input[type="number"] {
+  background: var(--light);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
 .controls input[type="number"]:hover {
   border-color: var(--primary);
 }
@@ -226,8 +291,16 @@ header h1 {
   transition: background 0.2s ease;
 }
 
+.dark-mode .controls input[type="range"] {
+  background: var(--border);
+}
+
 .controls input[type="range"]:hover {
   background: #d1d5db;
+}
+
+.dark-mode .controls input[type="range"]:hover {
+  background: #374151;
 }
 
 .controls input[type="range"]::-webkit-slider-thumb {
@@ -385,6 +458,10 @@ button:active {
   height: 100%;
 }
 
+.dark-mode .preview {
+  background: var(--dark-light);
+}
+
 .preview-tabs:first-child {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
@@ -435,6 +512,10 @@ button:active {
   font-weight: 600;
 }
 
+.dark-mode .preview-tabs .tab.active {
+  background: var(--dark-light);
+}
+
 .preview-tabs .tab.active + .tab {
   border-left: 1px solid var(--border);
 }
@@ -457,6 +538,14 @@ button:active {
   position: relative;
 }
 
+.dark-mode .preview-content {
+  background:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-color: var(--light);
+}
+
 .svg-container {
   width: 100%;
   height: 100%;
@@ -472,6 +561,23 @@ button:active {
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+/* Dark mode SVG styling */
+.dark-mode .svg-container svg .sheet-boundary {
+  stroke: rgba(255, 255, 255, 0.5) !important;
+}
+
+.dark-mode .svg-container svg text {
+  fill: var(--text-primary) !important;
+}
+
+.dark-mode .svg-container svg .cut-line {
+  stroke: rgba(255, 255, 255, 0.9) !important;
+}
+
+.dark-mode .svg-container svg .sewing-line {
+  stroke: rgba(255, 255, 255, 0.4) !important;
 }
 
 @media (max-width: 1024px) {

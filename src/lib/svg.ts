@@ -47,13 +47,41 @@ export function generateFullSVG(
 ): string {
   const { showSeamAllowance = false, baseTessellation, padding = 10, units = 'mm' } = options;
 
-  // When showing seam allowance, use OFFSET tessellation bounds (result) for the viewBox
-  // This shows the full cutting area including seam allowance
-  // Original shapes will appear smaller inside because they don't have seam allowance
-  const { bounds } = result;
+  // Calculate bounds based on whether we're showing seam allowance with spacing
+  let width, height;
 
-  const width = bounds.width + padding * 2;
-  const height = bounds.height + padding * 2;
+  if (showSeamAllowance && baseTessellation) {
+    // When showing seam allowance with spacing, calculate actual bounds
+    const spacing = result.config.seamAllowance * 2;
+
+    // Calculate actual bounds by checking all transformed positions
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    for (let i = 0; i < baseTessellation.pieces.length; i++) {
+      const basePiece = baseTessellation.pieces[i];
+      const offsetPiece = result.pieces[i];
+
+      const spacingX = basePiece.col * spacing;
+      const spacingY = basePiece.row * spacing;
+
+      // Check bounds of offset polygon after spacing translation
+      for (const point of offsetPiece.polygon) {
+        const x = point.x + spacingX;
+        const y = point.y + spacingY;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    width = (maxX - minX) + padding * 2;
+    height = (maxY - minY) + padding * 2;
+  } else {
+    const { bounds } = result;
+    width = bounds.width + padding * 2;
+    height = bounds.height + padding * 2;
+  }
 
   let svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}${units}" height="${height}${units}" viewBox="0 0 ${width} ${height}">

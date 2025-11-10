@@ -254,8 +254,8 @@ export function generatePackedSVG(
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}${units}" height="${height}${units}" viewBox="0 0 ${width} ${height}">
   <defs>
     <style>
-      .cut-line { fill: none; stroke: black; stroke-width: ${strokeWidth}; }
-      .sewing-line { fill: none; stroke: #999; stroke-width: ${strokeWidth * 0.5}; stroke-dasharray: 2,2; }
+      .cut-line { fill: none; stroke: black; stroke-width: ${strokeWidth * 3}; }
+      .sewing-line { fill: none; stroke: #666; stroke-width: ${strokeWidth * 2}; stroke-dasharray: 3,3; }
       .sheet-boundary { fill: none; stroke: #ccc; stroke-width: 0.5; stroke-dasharray: 5,5; }
     </style>
   </defs>

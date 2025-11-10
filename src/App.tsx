@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { TessellationConfig } from './lib/types';
 import { generateTessellation, applySeamAllowance, groupByColor } from './lib/tessellation';
 import { generateFullSVG, downloadSVG } from './lib/svg';
@@ -45,8 +45,8 @@ const generateEqualProbabilities = (count: number): number[] => {
 const DEFAULT_COLORS = 3;
 
 const DEFAULT_CONFIG: TessellationConfig = {
-  rows: 1,
-  cols: 3,
+  rows: 6,
+  cols: 9,
   squareSize: 50, // mm
   colors: DEFAULT_COLORS,
   splitProbability: 0.4,
@@ -72,6 +72,20 @@ function App() {
   const [activeTab, setActiveTab] = useState<ViewTab>('full');
   const [sheetWidth, setSheetWidth] = useState(600); // mm
   const [sheetHeight, setSheetHeight] = useState(400); // mm
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const stored = localStorage.getItem('darkMode');
+    return stored ? JSON.parse(stored) : false;
+  });
+
+  // Apply dark mode class and persist preference
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark-mode', isDarkMode);
+    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+  }, [isDarkMode]);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+  };
 
   // Generate base tessellation (without seam allowance)
   const baseTessellation = useMemo(() => {
@@ -269,6 +283,13 @@ function App() {
     <div className="app">
       <header>
         <h1>Quilted Tessellation Generator</h1>
+        <button
+          className="dark-mode-toggle"
+          onClick={toggleDarkMode}
+          aria-label="Toggle dark mode"
+        >
+          {isDarkMode ? '☀️' : '🌙'}
+        </button>
       </header>
 
       <div className="container">
@@ -326,9 +347,20 @@ function App() {
                 key={colorIndex}
                 className={activeTab === `color-${colorIndex}` ? 'tab active' : 'tab'}
                 onClick={() => setActiveTab(`color-${colorIndex}` as ViewTab)}
-                style={{ borderBottomColor: palette[colorIndex] }}
+                style={activeTab === `color-${colorIndex}` ? { borderBottomColor: palette[colorIndex] } : {}}
               >
                 {getColorName(colorIndex)} Packing
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: palette[colorIndex],
+                    marginLeft: '8px',
+                    border: '1px solid rgba(0,0,0,0.2)'
+                  }}
+                />
               </button>
             ))}
           </div>
