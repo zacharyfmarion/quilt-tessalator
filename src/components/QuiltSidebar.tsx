@@ -71,7 +71,7 @@ export function QuiltSidebar({
             Square Size: {config.squareSize} mm
             <input
               type="range"
-              min="20"
+              min="10"
               max="100"
               value={config.squareSize}
               onChange={(e) => updateConfig({ squareSize: parseInt(e.target.value) })}

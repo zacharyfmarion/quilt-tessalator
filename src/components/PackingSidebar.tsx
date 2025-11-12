@@ -163,7 +163,7 @@ export function PackingSidebar({
       </div>
 
       <div className="controls-footer">
-        {!packingProgress?.isRunning && !packedLayout && (
+        {!packingProgress?.isRunning && (
           <button
             onClick={() => {
               console.log('[PackingSidebar] Pack button clicked for color:', colorIndex);
@@ -174,7 +174,7 @@ export function PackingSidebar({
               marginBottom: '0.75rem'
             }}
           >
-            📦 Pack {getColorName(colorIndex)}
+            📦 {packedLayout ? 'Re-pack' : 'Pack'} {getColorName(colorIndex)}
           </button>
         )}
 

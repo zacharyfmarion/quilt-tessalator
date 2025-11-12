@@ -74,8 +74,8 @@ function App() {
   const [packingSpacing, setPackingSpacing] = useState(3); // mm
   const [maxPackingIterations, setMaxPackingIterations] = useState(10);
   const [activeTab, setActiveTab] = useState<ViewTab>('full');
-  const [sheetWidth, setSheetWidth] = useState(600); // mm
-  const [sheetHeight, setSheetHeight] = useState(400); // mm
+  const [sheetWidth, _setSheetWidth] = useState(600); // mm
+  const [sheetHeight, _setSheetHeight] = useState(400); // mm
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const stored = localStorage.getItem('darkMode');
     return stored ? JSON.parse(stored) : false;
@@ -178,6 +178,12 @@ function App() {
         newConfig.colorProbabilities = newProbs;
       }
 
+      // If seam allowance changed, clear packed layouts (they need to be repacked)
+      if (partial.seamAllowance !== undefined && partial.seamAllowance !== prev.seamAllowance) {
+        setPackedLayouts(new Map());
+        toast.info('Seam allowance changed. Please re-pack colors.');
+      }
+
       return newConfig;
     });
   };
@@ -277,6 +283,25 @@ function App() {
       ...prev,
       [sectionName]: !prev[sectionName]
     }));
+  };
+
+  // Wrapper functions to clear packed layouts when settings change
+  const setSheetWidth = (value: number) => {
+    _setSheetWidth(value);
+    setPackedLayouts(new Map());
+    toast.info('Sheet width changed. Please re-pack colors.');
+  };
+
+  const setSheetHeight = (value: number) => {
+    _setSheetHeight(value);
+    setPackedLayouts(new Map());
+    toast.info('Sheet height changed. Please re-pack colors.');
+  };
+
+  const setPackingSpacingWrapper = (value: number) => {
+    setPackingSpacing(value);
+    setPackedLayouts(new Map());
+    toast.info('Packing spacing changed. Please re-pack colors.');
   };
 
   const handlePackColor = async (colorIndex: number) => {
@@ -476,7 +501,7 @@ function App() {
               showSeamAllowance={showSeamAllowance}
               setShowSeamAllowance={setShowSeamAllowance}
               packingSpacing={packingSpacing}
-              setPackingSpacing={setPackingSpacing}
+              setPackingSpacing={setPackingSpacingWrapper}
               palette={palette}
               updatePaletteColor={updatePaletteColor}
               updateColorProbability={updateColorProbability}
@@ -491,7 +516,7 @@ function App() {
               config={config}
               updateConfig={updateConfig}
               packingSpacing={packingSpacing}
-              setPackingSpacing={setPackingSpacing}
+              setPackingSpacing={setPackingSpacingWrapper}
               maxPackingIterations={maxPackingIterations}
               setMaxPackingIterations={setMaxPackingIterations}
               sheetWidth={sheetWidth}
