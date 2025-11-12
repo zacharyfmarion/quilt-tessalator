@@ -9,6 +9,7 @@ export interface TessellationPiece {
   isTriangle: boolean;
   row: number;
   col: number;
+  gridCol: number; // original grid column (col is sequential per row)
   position: 'top' | 'bottom' | 'full'; // for triangles/quads or full rectangle
 }
 

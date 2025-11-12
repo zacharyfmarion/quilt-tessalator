@@ -24,6 +24,10 @@ interface PackingSidebarProps {
   packingProgress?: PackingProgress;
   onPackColor: () => void;
   onStopPacking: () => void;
+  showPackedLabels: boolean;
+  setShowPackedLabels: (value: boolean) => void;
+  showPackedSewingLines: boolean;
+  setShowPackedSewingLines: (value: boolean) => void;
 }
 
 export function PackingSidebar({
@@ -45,7 +49,11 @@ export function PackingSidebar({
   onDownload,
   packingProgress,
   onPackColor: _onPackColor,
-  onStopPacking
+  onStopPacking,
+  showPackedLabels,
+  setShowPackedLabels,
+  showPackedSewingLines,
+  setShowPackedSewingLines
 }: PackingSidebarProps) {
   return (
     <>
@@ -159,6 +167,36 @@ export function PackingSidebar({
           {!packedLayout && (!packingProgress || !packingProgress.isRunning) && (
             <p>No packing data available</p>
           )}
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Display Options"
+          isCollapsed={!!collapsedSections['display-options']}
+          onToggle={() => toggleSection('display-options')}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showPackedLabels}
+              onChange={(e) => setShowPackedLabels(e.target.checked)}
+            />
+            <span>Show Grid Labels</span>
+          </label>
+          <small style={{ display: 'block', marginTop: '0.25rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+            Display (row, col) coordinates on each piece
+          </small>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showPackedSewingLines}
+              onChange={(e) => setShowPackedSewingLines(e.target.checked)}
+            />
+            <span>Show Sewing Lines</span>
+          </label>
+          <small style={{ display: 'block', marginTop: '0.25rem', color: 'var(--text-secondary)' }}>
+            Display dotted lines for actual piece size (minus seam allowance)
+          </small>
         </CollapsibleSection>
       </div>
 

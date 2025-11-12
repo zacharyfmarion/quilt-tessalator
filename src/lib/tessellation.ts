@@ -48,6 +48,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
           isTriangle: splitAngleVariation === 0,
           row,
           col: pieceCol++, // Assign sequential col for first piece
+          gridCol: col, // Store original grid column
           position: 'top',
         });
 
@@ -58,6 +59,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
           isTriangle: splitAngleVariation === 0,
           row,
           col: pieceCol++, // Assign sequential col for second piece
+          gridCol: col, // Store original grid column
           position: 'bottom',
         });
       } else {
@@ -68,6 +70,7 @@ export function generateTessellation(config: TessellationConfig): TessellationRe
           isTriangle: false,
           row,
           col: pieceCol++, // Assign sequential col
+          gridCol: col, // Store original grid column
           position: 'full',
         });
       }

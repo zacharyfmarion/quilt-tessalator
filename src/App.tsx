@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Save, FolderOpen, Moon, Sun } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { TessellationConfig, TessellationResult } from './lib/types';
@@ -71,11 +71,14 @@ function App() {
   const [showSeamAllowance, setShowSeamAllowance] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [palette, setPalette] = useState<string[]>(() => generateInitialPalette(DEFAULT_COLORS));
-  const [packingSpacing, setPackingSpacing] = useState(3); // mm
-  const [maxPackingIterations, setMaxPackingIterations] = useState(10);
+  const [packingSpacing, setPackingSpacing] = useState(7.5); // mm
+  const [maxPackingIterations, setMaxPackingIterations] = useState(100);
   const [activeTab, setActiveTab] = useState<ViewTab>('full');
-  const [sheetWidth, _setSheetWidth] = useState(600); // mm
-  const [sheetHeight, _setSheetHeight] = useState(400); // mm
+  const [sheetWidth, _setSheetWidth] = useState(900); // mm
+  const [sheetHeight, _setSheetHeight] = useState(550); // mm
+  const [showPackedLabels, setShowPackedLabels] = useState(true);
+  const [showPackedSewingLines, setShowPackedSewingLines] = useState(true);
+  const [isLoadingPattern, setIsLoadingPattern] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const stored = localStorage.getItem('darkMode');
     return stored ? JSON.parse(stored) : false;
@@ -145,6 +148,17 @@ function App() {
   const [packedLayouts, setPackedLayouts] = useState<Map<number, PackedResult>>(new Map());
   const [packingProgress, setPackingProgress] = useState<Map<number, PackingProgress>>(new Map());
   const nestersRef = useRef<Map<number, AnyNest>>(new Map());
+  const toastTimerRef = useRef<number | null>(null);
+
+  // Debounced toast notification for setting changes
+  const debouncedToast = useCallback((message: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = setTimeout(() => {
+      toast(message, { icon: 'ℹ️' });
+    }, 2000);
+  }, []);
 
   const updateConfig = (partial: Partial<TessellationConfig>) => {
     setConfig(prev => {
@@ -181,7 +195,7 @@ function App() {
       // If seam allowance changed, clear packed layouts (they need to be repacked)
       if (partial.seamAllowance !== undefined && partial.seamAllowance !== prev.seamAllowance) {
         setPackedLayouts(new Map());
-        toast.info('Seam allowance changed. Please re-pack colors.');
+        debouncedToast('Seam allowance changed. Please re-pack colors.');
       }
 
       return newConfig;
@@ -213,7 +227,9 @@ function App() {
       if (!packed) return;
 
       const packedSvg = generatePackedSVG(packed, getColorName(colorIndex), {
-        units: 'mm'
+        units: 'mm',
+        showLabels: showPackedLabels,
+        showSewingLines: showPackedSewingLines
       });
       downloadSVG(packedSvg, `tessellation-${getColorName(colorIndex).toLowerCase().replace(' ', '-')}-packed.svg`);
     }
@@ -289,19 +305,19 @@ function App() {
   const setSheetWidth = (value: number) => {
     _setSheetWidth(value);
     setPackedLayouts(new Map());
-    toast.info('Sheet width changed. Please re-pack colors.');
+    debouncedToast('Sheet width changed. Please re-pack colors.');
   };
 
   const setSheetHeight = (value: number) => {
     _setSheetHeight(value);
     setPackedLayouts(new Map());
-    toast.info('Sheet height changed. Please re-pack colors.');
+    debouncedToast('Sheet height changed. Please re-pack colors.');
   };
 
   const setPackingSpacingWrapper = (value: number) => {
     setPackingSpacing(value);
     setPackedLayouts(new Map());
-    toast.info('Packing spacing changed. Please re-pack colors.');
+    debouncedToast('Packing spacing changed. Please re-pack colors.');
   };
 
   const handlePackColor = async (colorIndex: number) => {
@@ -401,8 +417,21 @@ function App() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setIsLoadingPattern(true);
+
     try {
       const pattern = await uploadPattern(file);
+
+      // Migrate old patterns that don't have gridCol field
+      const migratedPieces = pattern.pieces.map(piece => {
+        if (piece.gridCol === undefined) {
+          // Extract gridCol from ID (format: "r{row}-c{col}-{suffix}")
+          const match = piece.id.match(/r(\d+)-c(\d+)-/);
+          const gridCol = match ? parseInt(match[2]) : 0;
+          return { ...piece, gridCol };
+        }
+        return piece;
+      });
 
       // Restore the config
       setConfig(pattern.config);
@@ -413,9 +442,9 @@ function App() {
       // Clear color overrides
       setColorOverrides(new Map());
 
-      // Restore the exact tessellation
+      // Restore the exact tessellation with migrated pieces
       setLoadedTessellation({
-        pieces: pattern.pieces,
+        pieces: migratedPieces,
         config: pattern.config,
         bounds: pattern.bounds,
       });
@@ -424,6 +453,8 @@ function App() {
     } catch (error) {
       console.error('Failed to load pattern:', error);
       toast.error(`Failed to load: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoadingPattern(false);
     }
 
     // Reset the file input
@@ -464,21 +495,28 @@ function App() {
       <header>
         <h1>Quilted Tessellation Generator</h1>
         <div className="header-buttons">
+          {isLoadingPattern && (
+            <span style={{ marginRight: '1rem', color: 'var(--text-secondary)' }}>
+              Loading pattern...
+            </span>
+          )}
           <button
             className="header-icon-button"
             onClick={handleSavePattern}
             aria-label="Save pattern"
             title="Save pattern"
+            disabled={isLoadingPattern}
           >
             <Save size={18} />
           </button>
-          <label className="header-icon-button" title="Load pattern">
+          <label className={`header-icon-button ${isLoadingPattern ? 'disabled' : ''}`} title="Load pattern">
             <FolderOpen size={18} />
             <input
               type="file"
               accept=".json"
               onChange={handleLoadPattern}
               style={{ display: 'none' }}
+              disabled={isLoadingPattern}
             />
           </label>
           <button
@@ -486,6 +524,7 @@ function App() {
             onClick={toggleDarkMode}
             aria-label="Toggle dark mode"
             title={isDarkMode ? 'Light mode' : 'Dark mode'}
+            disabled={isLoadingPattern}
           >
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -532,6 +571,10 @@ function App() {
               packingProgress={packingProgress.get(parseInt(activeTab.split('-')[1]))}
               onPackColor={() => handlePackColor(parseInt(activeTab.split('-')[1]))}
               onStopPacking={() => handleStopPacking(parseInt(activeTab.split('-')[1]))}
+              showPackedLabels={showPackedLabels}
+              setShowPackedLabels={setShowPackedLabels}
+              showPackedSewingLines={showPackedSewingLines}
+              setShowPackedSewingLines={setShowPackedSewingLines}
             />
           )}
         </aside>
@@ -607,7 +650,9 @@ function App() {
                 if (!packed) return null;
 
                 const packedSvg = generatePackedSVG(packed, getColorName(colorIndex), {
-                  units: 'mm'
+                  units: 'mm',
+                  showLabels: showPackedLabels,
+                  showSewingLines: showPackedSewingLines
                 });
 
                 return <div className="svg-container" dangerouslySetInnerHTML={{ __html: packedSvg }} />;

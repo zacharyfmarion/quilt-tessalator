@@ -234,6 +234,48 @@ function calculatePolygonArea(polygon: Polygon): number {
 }
 
 /**
+ * Calculate centroid of a polygon
+ */
+function calculatePolygonCentroid(polygon: Polygon): { x: number; y: number } {
+  let cx = 0;
+  let cy = 0;
+  let area = 0;
+  const n = polygon.length;
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const cross = polygon[i].x * polygon[j].y - polygon[j].x * polygon[i].y;
+    cx += (polygon[i].x + polygon[j].x) * cross;
+    cy += (polygon[i].y + polygon[j].y) * cross;
+    area += cross;
+  }
+
+  area *= 0.5;
+  const factor = 1 / (6 * area);
+
+  return {
+    x: cx * factor,
+    y: cy * factor
+  };
+}
+
+/**
+ * Generate grid coordinate label for a piece
+ * Format: "(row, col)" or "(row, col) L/R" for split pieces
+ */
+function generateGridLabel(piece: TessellationPiece): string {
+  const baseLabel = `(${piece.row}, ${piece.gridCol})`;
+
+  if (piece.position === 'top') {
+    return `${baseLabel} L`;
+  } else if (piece.position === 'bottom') {
+    return `${baseLabel} R`;
+  }
+
+  return baseLabel;
+}
+
+/**
  * Generate SVG for packed layout
  * Shows both original pieces (sewing lines) and offset pieces (cutting lines)
  */
@@ -244,9 +286,11 @@ export function generatePackedSVG(
     padding?: number;
     units?: string;
     strokeWidth?: number;
+    showLabels?: boolean;
+    showSewingLines?: boolean;
   } = {}
 ): string {
-  const { padding = 10, units = 'mm', strokeWidth = 0.1 } = options;
+  const { padding = 10, units = 'mm', strokeWidth = 0.1, showLabels = true, showSewingLines = true } = options;
 
   const width = packed.sheetWidth + padding * 2;
   const height = packed.sheetHeight + padding * 2;
@@ -269,13 +313,32 @@ export function generatePackedSVG(
   for (const packedPiece of packed.pieces) {
     const transform = `translate(${packedPiece.x.toFixed(3)}, ${packedPiece.y.toFixed(3)}) rotate(${packedPiece.rotation})`;
 
-    // Draw original piece as dashed line (sewing guide)
-    const originalPathData = polygonToPath(packedPiece.originalPiece.polygon);
-    svg += `    <path id="${packedPiece.originalPiece.id}-sewing" class="sewing-line" transform="${transform}" d="${originalPathData}"/>\n`;
+    // Draw original piece as dashed line (sewing guide) if enabled
+    if (showSewingLines) {
+      const originalPathData = polygonToPath(packedPiece.originalPiece.polygon);
+      svg += `    <path id="${packedPiece.originalPiece.id}-sewing" class="sewing-line" transform="${transform}" d="${originalPathData}"/>\n`;
+    }
 
     // Draw offset piece as solid line (cutting line)
     const cutPathData = polygonToPath(packedPiece.piece.polygon);
     svg += `    <path id="${packedPiece.piece.id}" class="cut-line" transform="${transform}" d="${cutPathData}"/>\n`;
+  }
+
+  // Add labels if enabled
+  if (showLabels) {
+    for (const packedPiece of packed.pieces) {
+      const centroid = calculatePolygonCentroid(packedPiece.piece.polygon);
+      const label = generateGridLabel(packedPiece.originalPiece);
+
+      // Calculate transformed centroid position
+      const rad = (packedPiece.rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const labelX = packedPiece.x + centroid.x * cos - centroid.y * sin;
+      const labelY = packedPiece.y + centroid.x * sin + centroid.y * cos;
+
+      svg += `    <text x="${labelX.toFixed(3)}" y="${labelY.toFixed(3)}" font-family="Arial, sans-serif" font-size="8" fill="black" text-anchor="middle" dominant-baseline="middle">${label}</text>\n`;
+    }
   }
 
   // Add metadata

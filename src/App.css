@@ -96,7 +96,7 @@ header h1 {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.header-icon-button:hover {
+.header-icon-button:hover:not(:disabled):not(.disabled) {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
@@ -115,6 +115,13 @@ header h1 {
 
 .header-icon-button svg {
   stroke-width: 2;
+}
+
+.header-icon-button:disabled,
+.header-icon-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .container {
